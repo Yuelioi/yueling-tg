@@ -1,0 +1,39 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# 构建产物
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+
+# 测试
+*.test
+*.out
+coverage.txt
+
+# 数据文件
+data/images/*
+!data/images/.gitkeep
+!data/fonts
+
+# 环境变量
+.env
+.env.local
+
+# 日志
+*.log
+
+# 临时文件
+tmp/
+temp/
+.DS_Store

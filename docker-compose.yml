@@ -1,0 +1,20 @@
+services:
+  yueling-bot:
+    image: ghcr.io/yuelioi/yueling-tg:latest
+    container_name: yueling-tg-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - HTTP_PROXY=http://host.docker.internal:10808
+      - HTTPS_PROXY=http://host.docker.internal:10808
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    network_mode: "host" # 使用宿主机网络
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
