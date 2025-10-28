@@ -3,18 +3,21 @@ package main
 import (
 	"os"
 	"time"
-	"yueling_tg/core/bot"
-	"yueling_tg/core/log"
+	"yueling_tg/internal/core/log"
 	"yueling_tg/middleware"
+	"yueling_tg/pkg/bot"
 	"yueling_tg/plugins/ban"
 	"yueling_tg/plugins/calculator"
 	"yueling_tg/plugins/chat"
+	"yueling_tg/plugins/emotion"
 	"yueling_tg/plugins/fortune"
 	"yueling_tg/plugins/help"
 	"yueling_tg/plugins/image"
+	"yueling_tg/plugins/music"
 	"yueling_tg/plugins/random"
 	"yueling_tg/plugins/recall"
 	"yueling_tg/plugins/reply"
+	"yueling_tg/plugins/sticker"
 
 	"github.com/joho/godotenv"
 )
@@ -48,16 +51,18 @@ func main() {
 		logger.Info().Msgf("已使用环境变量设置代理: HTTP_PROXY=%s, HTTPS_PROXY=%s", httpProxy, httpsProxy)
 	}
 
-	b := bot.NewBot(botToken, logger)
+	b, err := bot.NewBot(botToken, logger)
+	if err != nil {
+		logger.Panic().Msg("创建 Bot 失败")
+	}
 
 	b.RegisterPlugins(
-		image.New(), fortune.New(), help.New(), reply.New(), chat.New(), ban.New(), recall.New(), calculator.New())
-
-	b.RegisterPlugins(random.Plugins()...)
+		image.New(), emotion.New(), fortune.New(), help.New(), reply.New(), chat.New(),
+		ban.New(), recall.New(), calculator.New(), random.New(), music.New(), sticker.New())
 
 	b.RegisterMiddlewares(
 		middleware.LoggingMiddleware(),
-		middleware.RateLimitMiddleware(10, 1*time.Minute),
+		middleware.RateLimitMiddleware(60, 1*time.Minute),
 		middleware.RecoveryMiddleware(),
 	)
 	b.Run()

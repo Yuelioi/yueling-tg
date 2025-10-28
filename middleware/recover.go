@@ -3,9 +3,9 @@ package middleware
 import (
 	"fmt"
 	"runtime/debug"
-	"yueling_tg/core/context"
-	"yueling_tg/core/log"
-	"yueling_tg/core/middleware"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/core/log"
+	"yueling_tg/internal/middleware"
 )
 
 var loggerRecover = log.NewMiddleware("PANIC 中间件")

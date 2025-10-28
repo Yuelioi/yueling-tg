@@ -7,16 +7,15 @@ import (
 	"strconv"
 	"strings"
 
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 )
 
 var _ plugin.Plugin = (*RollPlugin)(nil)
 
-func NewRollPlugin() plugin.Plugin {
+func New() plugin.Plugin {
 	rp := &RollPlugin{
 		Base: plugin.NewBase(&plugin.PluginInfo{
 			ID:          "roll",
@@ -25,14 +24,14 @@ func NewRollPlugin() plugin.Plugin {
 			Version:     "1.1.0",
 			Author:      "月离",
 			Usage:       "roll 整数 | 整数 整数 | x y z... | GIF/视频",
-			Group:       "funny",
+			Group:       "娱乐",
 			Extra:       make(map[string]any),
 		}),
 	}
 
 	cmds := []string{"roll"}
 	handler := handler.NewHandler(rp.rollHandler)
-	m := on.OnCommand(cmds, true, handler)
+	m := plugin.OnCommand(cmds, true, handler)
 	rp.AddMatcher(m)
 
 	return rp
@@ -64,6 +63,11 @@ func (rp *RollPlugin) rollHandler(c *context.Context, commandArgs params.Command
 
 	if len(args) == 0 {
 		c.Reply("用法：roll 整数 | 整数 整数 | x y z... | GIF/视频")
+		return
+	}
+
+	if len(args) == 1 && args[0] == "6" {
+		c.SendDice("🎲")
 		return
 	}
 

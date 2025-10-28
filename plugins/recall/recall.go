@@ -1,10 +1,9 @@
 package recall
 
 import (
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -26,14 +25,14 @@ func New() plugin.Plugin {
 			Version:     "1.0.0",
 			Author:      "月离",
 			Usage:       "撤回",
-			Group:       "funny",
+			Group:       "娱乐",
 			Extra:       make(map[string]any),
 		},
 		),
 	}
 
 	recallHandler := handler.NewHandler(rp.handleRecall)
-	recallMatcher := on.OnFullMatch([]string{"撤回"}, recallHandler).
+	recallMatcher := plugin.OnFullMatch([]string{"撤回"}, recallHandler).
 		SetPriority(10).SetBlock(true)
 
 	rp.AddMatcher(recallMatcher)

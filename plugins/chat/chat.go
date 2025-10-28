@@ -11,11 +11,10 @@ import (
 	"sync"
 	"time"
 
-	ctxx "yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	ctxx "yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 
 	"github.com/sashabaranov/go-openai"
 )
@@ -69,7 +68,7 @@ func New() plugin.Plugin {
 			Version:     "1.0.0",
 			Author:      "月离",
 			Usage:       "@机器人 + 内容\n查看好感度",
-			Group:       "funny",
+			Group:       "娱乐",
 			Extra:       make(map[string]any),
 		}),
 
@@ -99,12 +98,12 @@ func New() plugin.Plugin {
 
 	// AI 聊天
 	chatHandler := handler.NewHandler(cp.handleChat)
-	chatMatcher := on.OnMessage(chatHandler).
+	chatMatcher := plugin.OnMessage(chatHandler).
 		SetPriority(1) // 低优先级
 
 	// 查看好感度
 	likeHandler := handler.NewHandler(cp.handleLike)
-	likeMatcher := on.OnCommand([]string{"查看好感度", "查询好感度", "好感度"}, true, likeHandler).
+	likeMatcher := plugin.OnCommand([]string{"查看好感度", "查询好感度", "好感度"}, true, likeHandler).
 		SetPriority(10)
 
 	cp.SetMatchers([]*plugin.Matcher{

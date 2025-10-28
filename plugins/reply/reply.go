@@ -8,11 +8,10 @@ import (
 	"strings"
 	"sync"
 
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 )
 
 var _ plugin.Plugin = (*ReplyPlugin)(nil)
@@ -51,7 +50,7 @@ func New() plugin.Plugin {
 			Version:     "1.0.0",
 			Author:      "月离",
 			Usage:       "添加回复 <关键词> <回复内容>\n删除回复 <ID>\n更新回复\n查看回复",
-			Group:       "system",
+			Group:       "系统",
 			Extra:       make(map[string]any),
 		}),
 		dbPath: "./data/reply.json",
@@ -74,27 +73,27 @@ func New() plugin.Plugin {
 
 	// 普通消息匹配
 	replyHandler := handler.NewHandler(rp.handleReply)
-	replyMatcher := on.OnMessage(replyHandler).
+	replyMatcher := plugin.OnMessage(replyHandler).
 		SetPriority(1) // 低优先级，让其他命令先处理
 
 	// 添加回复命令
 	addHandler := handler.NewHandler(rp.handleAddReply)
-	addMatcher := on.OnCommand([]string{"添加回复"}, true, addHandler).
+	addMatcher := plugin.OnCommand([]string{"添加回复"}, true, addHandler).
 		SetPriority(10)
 
 	// 删除回复命令
 	deleteHandler := handler.NewHandler(rp.handleDeleteReply)
-	deleteMatcher := on.OnCommand([]string{"删除回复"}, true, deleteHandler).
+	deleteMatcher := plugin.OnCommand([]string{"删除回复"}, true, deleteHandler).
 		SetPriority(10)
 
 	// 更新回复命令
 	updateHandler := handler.NewHandler(rp.handleUpdateReply)
-	updateMatcher := on.OnCommand([]string{"更新回复"}, true, updateHandler).
+	updateMatcher := plugin.OnCommand([]string{"更新回复"}, true, updateHandler).
 		SetPriority(10)
 
 	// 查看回复命令
 	listHandler := handler.NewHandler(rp.handleListReply)
-	listMatcher := on.OnCommand([]string{"查看回复"}, true, listHandler).
+	listMatcher := plugin.OnCommand([]string{"查看回复"}, true, listHandler).
 		SetPriority(10)
 
 	rp.SetMatchers([]*plugin.Matcher{

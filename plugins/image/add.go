@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"yueling_tg/core/context"
-	"yueling_tg/core/params"
-	"yueling_tg/core/utils"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/common"
+	"yueling_tg/pkg/plugin/params"
 )
 
 // -------------------- 添加图片逻辑 --------------------
@@ -61,7 +61,7 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 			continue
 		}
 
-		data, err := utils.FetchFile(url)
+		data, err := common.FetchFile(url)
 		if err != nil {
 			rg.Log.Error().Err(err).Msg("下载文件失败")
 			c.Replyf("第 %d 张下载失败 😭", i+1)
@@ -69,7 +69,7 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 		}
 
 		// 计算哈希
-		hash := utils.Sha1Hash(data)
+		hash := common.Sha1Hash(data)
 
 		// 检查是否已存在（基于哈希）
 		if existingImg, ok := rg.findByHash(hash); ok {
@@ -99,7 +99,7 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 		var filename string
 		if namePrefix != "" {
 			// 用户带参数 → 参数名 + 随机4位
-			filename = fmt.Sprintf("%s_%s%s", namePrefix, utils.RandomString(4), ext)
+			filename = fmt.Sprintf("%s_%s%s", namePrefix, common.RandomString(4), ext)
 		} else {
 			// 未带参数 → 使用 SHA1 哈希
 			filename = fmt.Sprintf("%s%s", hash, ext)

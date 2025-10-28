@@ -3,8 +3,8 @@ package middleware
 import (
 	"fmt"
 	"time"
-	"yueling_tg/core/context"
-	"yueling_tg/core/middleware"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/middleware"
 )
 
 func TimeoutMiddleware(timeout time.Duration) middleware.Middleware {

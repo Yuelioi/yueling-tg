@@ -4,10 +4,9 @@ import (
 	"math/rand"
 	"time"
 
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -28,7 +27,7 @@ var pluginInfo = &plugin.PluginInfo{
 	Version:     "1.0.0",
 	Author:      "月离",
 	Usage:       "我要睡觉",
-	Group:       "funny",
+	Group:       "娱乐",
 	Extra:       make(map[string]any),
 }
 
@@ -48,7 +47,7 @@ func New() plugin.Plugin {
 	}
 
 	sleepHandler := handler.NewHandler(p.handleSleep)
-	sleepMatcher := on.OnFullMatch([]string{"我要睡觉"}, sleepHandler).
+	sleepMatcher := plugin.OnFullMatch([]string{"我要睡觉"}, sleepHandler).
 		SetPriority(10)
 
 	p.AddMatcher(sleepMatcher)

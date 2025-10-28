@@ -5,12 +5,10 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"yueling_tg/core/bot"
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 )
 
 var _ plugin.Plugin = (*helper)(nil)
@@ -28,21 +26,20 @@ func New() plugin.Plugin {
 		Version:     "0.1.0",
 		Author:      "月离",
 		Usage:       "help [插件ID]",
-		Group:       "builtin",
+		Group:       "系统",
 		Extra:       nil,
 	})
 
 	h := &helper{base}
 
 	helpHandler := handler.NewHandler(h.listPlugins)
-	helpMatcher := on.OnCommand([]string{"help", "帮助"}, true, helpHandler)
+	helpMatcher := plugin.OnCommand([]string{"help", "帮助"}, true, helpHandler)
 	h.SetMatchers([]*plugin.Matcher{helpMatcher})
 
 	return h
 }
 
-func (h *helper) listPlugins(ctx *context.Context, cmdCtx params.CommandContext) {
-	plugins := bot.Plugins()
+func (h *helper) listPlugins(ctx *context.Context, cmdCtx params.CommandContext, plugins []plugin.Plugin) {
 	if plugins == nil {
 		h.Log.Warn().Msg("Plugins() 返回 nil")
 		ctx.Send("❌ 当前没有可用的插件")

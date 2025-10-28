@@ -8,11 +8,9 @@ import (
 	"strings"
 	"sync"
 
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/message"
-	"yueling_tg/core/on"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/message"
+	"yueling_tg/pkg/plugin"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -58,20 +56,19 @@ type RandomGenerator struct {
 // -------------------- 插件入口 --------------------
 
 func New() plugin.Plugin {
+	info := &plugin.PluginInfo{
+		ID:          "random",
+		Name:        "随机图片生成器",
+		Description: "支持 吃什么 / 喝什么 / 玩什么 / 美少女 / 龙图 等指令",
+		Version:     "1.2.0",
+		Author:      "月离",
+		Group:       "图库",
+		Extra:       make(map[string]any),
+	}
 	font := "./data/fonts/华康新综艺简繁W7.ttf"
 
 	rg := &RandomGenerator{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "random",
-			Name:        "随机图片生成器",
-			Description: "支持 吃什么 / 喝什么 / 玩什么 / 美少女 / 龙图 等指令",
-			Version:     "1.2.0",
-			Author:      "月离",
-			Group:       "funny",
-			Extra:       make(map[string]any),
-		}),
 		dbPath: "./data/images/index.json",
-
 		cfgs: []RandomConfig{
 			{"吃什么", "吃的", "今天吃这个吧！🍜", font, 750, 4, "今天我们来点 %s 吧～ 😋"},
 			{"喝什么", "喝的", "喝一杯？☕", font, 750, 4, "来杯 %s 吧～ ☕"},
@@ -87,52 +84,46 @@ func New() plugin.Plugin {
 		},
 	}
 
-	// 初始化索引数据库
-	rg.indexDB = &ImageIndexDB{
-		Images: make(map[string]*ImageIndex),
-	}
-
-	// 加载或创建索引
-	if err := rg.loadOrCreateIndex(); err != nil {
-		rg.Log.Error().Err(err).Msg("初始化图片索引失败")
-	}
-
-	matchers := []*plugin.Matcher{}
-
-	// 原来的随机图片命令
-	for _, cfg := range rg.cfgs {
-		c := cfg
-		m := on.OnFullMatch([]string{c.Command}, handler.NewHandler(func(ctx *context.Context) {
-			rg.handleCommand(ctx, c)
-		}))
-		matchers = append(matchers, m)
-	}
-
 	// 添加图片命令
 	addCommands := []string{
 		"添加老婆", "添加老公", "添加龙图", "添加福瑞", "添加杂鱼",
 		"添加吃的", "添加喝的", "添加玩的", "添加零食", "添加美少女", "添加ba",
 	}
-	addHandler := handler.NewHandler(rg.handleAddImage)
-	m2 := on.OnCommand(addCommands, true, addHandler)
-	matchers = append(matchers, m2)
 
-	// 删除图片命令
-	deleteCommands := []string{"删除图片"}
-	deleteHandler := handler.NewHandler(rg.handleDeleteImage)
-	m3 := on.OnCommand(deleteCommands, true, deleteHandler)
-	matchers = append(matchers, m3)
+	// 初始化索引数据库
+	rg.indexDB = &ImageIndexDB{
+		Images: make(map[string]*ImageIndex),
+	}
 
-	h4 := handler.NewHandler(rg.another)
-	m4 := on.OnCallbackStartsWith([]string{rg.PluginInfo().ID}, h4).SetPriority(9)
+	builder := plugin.New().
+		Info(info)
 
-	matchers = append(matchers, m4)
+	// 随机图片命令
+	for _, cfg := range rg.cfgs {
+		c := cfg
+		builder.OnFullMatch(c.Command).Do(func(c *context.Context) {
+			rg.handleCommand(c, cfg)
+		})
+	}
 
-	rg.SetMatchers(matchers)
+	builder.OnCommand(addCommands...).Do(rg.handleAddImage)
 
+	// 删除图片命令，阻止传播
+	builder.OnCommand("删除图片").Block(true).Do(rg.handleDeleteImage)
+
+	// 回调命令，设置高优先级
+	builder.OnCallbackStartsWith(info.ID).Priority(9).Do(rg.another)
+
+	rg.Base = builder.Go()
+
+	// 加载或创建索引
+	if err := rg.loadOrCreateIndex(); err != nil {
+		rg.Log.Error().Err(err).Msg("初始化图片索引失败")
+	}
 	return rg
 }
 
+// -------------------- 再来一张 --------------------
 func (rg *RandomGenerator) another(cmd string, c *context.Context) error {
 	rg.Log.Debug().Str("from", cmd).Msg("收到随机按钮点击")
 

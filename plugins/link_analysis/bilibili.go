@@ -6,14 +6,13 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"yueling_tg/core/context"
-	"yueling_tg/core/message"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/message"
 
 	"github.com/valyala/fasthttp"
 
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/plugin"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
 )
 
 // -------------------- 插件结构 --------------------
@@ -40,7 +39,7 @@ func NewBili() plugin.Plugin {
 	}
 
 	biliHandler := handler.NewHandler(bp.handleBiliLink)
-	biliMatcher := on.OnRegex([]string{`https?://[^\s]+`}, biliHandler).
+	biliMatcher := plugin.OnRegex([]string{`https?://[^\s]+`}, biliHandler).
 		SetPriority(1) // 普通优先级
 
 	bp.AddMatcher(

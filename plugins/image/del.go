@@ -2,9 +2,9 @@ package image
 
 import (
 	"os"
-	"yueling_tg/core/context"
-	"yueling_tg/core/params"
-	"yueling_tg/core/utils"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/common"
+	"yueling_tg/pkg/plugin/params"
 )
 
 // -------------------- 删除图片逻辑 --------------------
@@ -31,14 +31,14 @@ func (rg *RandomGenerator) handleDeleteImage(c *context.Context, cmdCtx params.C
 	}
 
 	// 下载图片并计算哈希
-	data, err := utils.FetchFile(url)
+	data, err := common.FetchFile(url)
 	if err != nil {
 		rg.Log.Error().Err(err).Msg("下载文件失败")
 		c.Reply("下载图片失败 😭")
 		return
 	}
 
-	hash := utils.Sha1Hash(data)
+	hash := common.Sha1Hash(data)
 
 	// 在索引中查找
 	imgIndex, ok := rg.findByHash(hash)

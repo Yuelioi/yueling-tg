@@ -1,6 +1,6 @@
 package link_analysis
 
-import "yueling_tg/core/plugin"
+import "yueling_tg/pkg/plugin"
 
 func Plugins() []plugin.Plugin {
 

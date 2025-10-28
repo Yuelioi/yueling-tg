@@ -6,14 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"yueling_tg/core/utils"
+	"yueling_tg/pkg/common"
 
 	"golang.org/x/sync/errgroup"
 )
 
 // -------------------- 索引管理 --------------------
 
-// loadOrCreateIndex 加载或创建图片索引
+// 加载或创建图片索引
 func (rg *RandomGenerator) loadOrCreateIndex() error {
 	if err := rg.loadIndex(); err != nil {
 		rg.Log.Warn().Err(err).Msg("加载索引失败，将扫描所有图片")
@@ -132,7 +132,7 @@ func (rg *RandomGenerator) scanFolder(category, folder string) (bool, error) {
 				return nil
 			}
 
-			hash := utils.Sha1Hash(data)
+			hash := common.Sha1Hash(data)
 			localMu.Lock()
 			localIndex[hash] = &ImageIndex{
 				Hash:     hash,

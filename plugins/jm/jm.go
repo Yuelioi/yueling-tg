@@ -11,12 +11,11 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/message"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/message"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 
 	"github.com/jung-kurt/gofpdf"
 )
@@ -64,7 +63,7 @@ func New() *JMPlugin {
 		client: jmClient,
 	}
 
-	matcher := on.OnCommand([]string{"jm", "JM"}, true, handler.NewHandler(jm.handleJM)).
+	matcher := plugin.OnCommand([]string{"jm", "JM"}, true, handler.NewHandler(jm.handleJM)).
 		SetPriority(1)
 
 	jm.AddMatcher(matcher)

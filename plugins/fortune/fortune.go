@@ -14,11 +14,10 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/message"
-	"yueling_tg/core/on"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/message"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/handler"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -59,12 +58,12 @@ func New() plugin.Plugin {
 			Author:      "月离",
 			Usage:       "抽签 <主题>",
 			Extra:       make(map[string]any),
-			Group:       "funny",
+			Group:       "娱乐",
 		}),
 		cfg: cfg,
 	}
 
-	cmdMatcher := on.OnCommand([]string{"抽签"}, true, handler.NewHandler(p.divine))
+	cmdMatcher := plugin.OnCommand([]string{"抽签"}, true, handler.NewHandler(p.divine))
 
 	p.AddMatcher(cmdMatcher)
 	return p

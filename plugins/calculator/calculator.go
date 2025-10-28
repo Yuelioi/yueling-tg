@@ -5,11 +5,9 @@ import (
 
 	"github.com/Knetic/govaluate"
 
-	"yueling_tg/core/context"
-	"yueling_tg/core/handler"
-	"yueling_tg/core/on"
-	"yueling_tg/core/params"
-	"yueling_tg/core/plugin"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/plugin"
+	"yueling_tg/pkg/plugin/params"
 )
 
 var _ plugin.Plugin = (*CalculatorPlugin)(nil)
@@ -32,13 +30,13 @@ func New() plugin.Plugin {
 				"group":    "工具",
 				"commands": []string{"计算"},
 			},
+			Group: "工具",
 		}),
 	}
 
-	cmdMatcher := on.OnCommand([]string{"计算"}, true, handler.NewHandler(cp.calcHandler))
-	cp.AddMatcher(cmdMatcher)
-
-	return cp
+	return plugin.New().
+		Info(cp.PluginInfo()).
+		OnCommand("计算").Do(cp.calcHandler).Go()
 }
 
 // 处理器

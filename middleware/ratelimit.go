@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sync"
 	"time"
-	"yueling_tg/core/context"
-	"yueling_tg/core/middleware"
+	"yueling_tg/internal/core/context"
+	"yueling_tg/internal/middleware"
 )
 
 // RateLimitMiddleware 频率限制中间件
