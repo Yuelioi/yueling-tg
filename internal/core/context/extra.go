@@ -296,15 +296,23 @@ func (c *Context) MuteUser(userID int64, duration time.Duration) error {
 	return c.Api.RestrictChatMember(c.Ctx, params)
 }
 
+// 获取文件
 func (c *Context) GetFile(fileID string) (*telego.File, error) {
 	return c.Api.GetFile(c.Ctx, &telego.GetFileParams{
 		FileID: fileID,
 	})
 }
+
+// 获取文件直接访问 URL
 func (c *Context) GetFileDirectURL(fileID string) (string, error) {
-	file, err := c.GetFile(fileID)
+	// 获取文件信息
+	file, err := c.Api.GetFile(c.Ctx, &telego.GetFileParams{
+		FileID: fileID,
+	})
 	if err != nil {
 		return "", err
 	}
-	return file.FilePath, nil
+
+	// 返回完整可访问 URL
+	return c.Api.FileDownloadURL(file.FilePath), nil
 }
