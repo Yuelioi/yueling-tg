@@ -7,7 +7,6 @@ import (
 	"strings"
 	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 	"yueling_tg/pkg/plugin/params"
 )
 
@@ -18,8 +17,8 @@ type helper struct {
 }
 
 func New() plugin.Plugin {
-
-	base := plugin.NewBase(&plugin.PluginInfo{
+	// 插件信息
+	info := &plugin.PluginInfo{
 		ID:          "help",
 		Name:        "帮助插件",
 		Description: "提供帮助信息",
@@ -27,16 +26,14 @@ func New() plugin.Plugin {
 		Author:      "月离",
 		Usage:       "help [插件ID]",
 		Group:       "系统",
-		Extra:       nil,
-	})
+		Extra:       make(map[string]any),
+	}
 
-	h := &helper{base}
+	// 初始化 helper 插件实例
+	h := &helper{}
 
-	helpHandler := handler.NewHandler(h.listPlugins)
-	helpMatcher := plugin.OnCommand([]string{"help", "帮助"}, true, helpHandler)
-	h.SetMatchers([]*plugin.Matcher{helpMatcher})
-
-	return h
+	// 返回插件，并注入 Base
+	return plugin.New().Info(info).OnCommand("help", "帮助").Do(h.listPlugins).Go(h)
 }
 
 func (h *helper) listPlugins(ctx *context.Context, cmdCtx params.CommandContext, plugins []plugin.Plugin) {

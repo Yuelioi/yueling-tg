@@ -16,6 +16,7 @@ import (
 	"time"
 	"yueling_tg/internal/core/context"
 	"yueling_tg/internal/message"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
 	"yueling_tg/pkg/plugin/handler"
 
@@ -33,14 +34,40 @@ type FortuneConfig struct {
 	Copywriting string
 }
 
+type PluginConfig struct {
+	Storage string `mapstructure:"storage"`
+}
+
 type FortuneGenerator struct {
-	cfg FortuneConfig
+	cfg    FortuneConfig
+	config PluginConfig
 	*plugin.Base
 }
 
 func New() plugin.Plugin {
 
-	basePath := "./data/fortune"
+	info := &plugin.PluginInfo{
+		ID:          "fortune",
+		Name:        "抽签",
+		Description: "发送抽签结果",
+		Version:     "0.1.0",
+		Author:      "月离",
+		Usage:       "抽签 <主题>",
+		Extra:       make(map[string]any),
+		Group:       "娱乐",
+	}
+
+	p := &FortuneGenerator{
+		Base: plugin.NewBase(info),
+	}
+
+	if err := config.GetPluginConfigOrDefault(info.ID, &p.config, PluginConfig{
+		Storage: "./data/fortune",
+	}); err != nil {
+		panic(err)
+	}
+
+	basePath := p.config.Storage
 
 	cfg := FortuneConfig{
 		BasePath:    basePath,
@@ -49,19 +76,7 @@ func New() plugin.Plugin {
 		FontsDir:    filepath.Join(basePath, "fonts"),
 		Copywriting: filepath.Join(basePath, "copywriting.json"),
 	}
-	p := &FortuneGenerator{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "fortune",
-			Name:        "抽签",
-			Description: "发送抽签结果",
-			Version:     "0.1.0",
-			Author:      "月离",
-			Usage:       "抽签 <主题>",
-			Extra:       make(map[string]any),
-			Group:       "娱乐",
-		}),
-		cfg: cfg,
-	}
+	p.cfg = cfg
 
 	cmdMatcher := plugin.OnCommand([]string{"抽签"}, true, handler.NewHandler(p.divine))
 

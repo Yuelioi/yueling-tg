@@ -157,7 +157,7 @@ func (sp *StickerPlugin) handleListSet(ctx *context.Context) {
 // -------------------- 数据管理 --------------------
 
 func (sp *StickerPlugin) loadData() error {
-	data, err := os.ReadFile(sp.dbPath)
+	data, err := os.ReadFile(sp.config.DBPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -169,7 +169,7 @@ func (sp *StickerPlugin) loadData() error {
 }
 
 func (sp *StickerPlugin) saveData() error {
-	dir := filepath.Dir(sp.dbPath)
+	dir := filepath.Dir(sp.config.DBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -179,5 +179,5 @@ func (sp *StickerPlugin) saveData() error {
 		return err
 	}
 
-	return os.WriteFile(sp.dbPath, data, 0644)
+	return os.WriteFile(sp.config.DBPath, data, 0644)
 }

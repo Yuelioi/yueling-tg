@@ -9,32 +9,32 @@ import (
 
 	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 	"yueling_tg/pkg/plugin/params"
 )
 
 var _ plugin.Plugin = (*RollPlugin)(nil)
 
 func New() plugin.Plugin {
-	rp := &RollPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "roll",
-			Name:        "随心Roll",
-			Description: "支持数字随机、字符串随机、GIF/视频随机帧抽取(需要ffmpeg)",
-			Version:     "1.1.0",
-			Author:      "月离",
-			Usage:       "roll 整数 | 整数 整数 | x y z... | GIF/视频",
-			Group:       "娱乐",
-			Extra:       make(map[string]any),
-		}),
+	rp := &RollPlugin{}
+
+	info := &plugin.PluginInfo{
+		ID:          "roll",
+		Name:        "随心Roll",
+		Description: "支持数字随机、字符串随机、GIF/视频随机帧抽取(需要ffmpeg)",
+		Version:     "1.1.0",
+		Author:      "月离",
+		Usage:       "roll 整数 | 整数 整数 | x y z... | GIF/视频",
+		Group:       "娱乐",
+		Extra:       make(map[string]any),
 	}
 
-	cmds := []string{"roll"}
-	handler := handler.NewHandler(rp.rollHandler)
-	m := plugin.OnCommand(cmds, true, handler)
-	rp.AddMatcher(m)
+	builder := plugin.New().Info(info)
 
-	return rp
+	// 注册 roll 命令
+	builder.OnCommand("roll").Do(rp.rollHandler)
+
+	// 返回插件，并注入 Base
+	return builder.Go(rp)
 }
 
 type RollPlugin struct {

@@ -12,7 +12,6 @@ import (
 	"github.com/valyala/fasthttp"
 
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 )
 
 // -------------------- 插件结构 --------------------
@@ -25,28 +24,26 @@ type BiliPlugin struct {
 }
 
 func NewBili() plugin.Plugin {
-	bp := &BiliPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "bili",
-			Name:        "B站链接解析",
-			Description: "解析消息中的 B站 视频/番剧/直播/专栏/动态 链接并返回信息",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "发送 B站 链接即可解析",
-			Group:       "工具",
-			Extra:       make(map[string]any),
-		}),
+	bp := &BiliPlugin{}
+
+	info := &plugin.PluginInfo{
+		ID:          "bili",
+		Name:        "B站链接解析",
+		Description: "解析消息中的 B站 视频/番剧/直播/专栏/动态 链接并返回信息",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "发送 B站 链接即可解析",
+		Group:       "工具",
+		Extra:       make(map[string]any),
 	}
 
-	biliHandler := handler.NewHandler(bp.handleBiliLink)
-	biliMatcher := plugin.OnRegex([]string{`https?://[^\s]+`}, biliHandler).
-		SetPriority(1) // 普通优先级
+	builder := plugin.New().Info(info)
 
-	bp.AddMatcher(
-		biliMatcher,
-	)
+	// 注册正则匹配命令
+	builder.OnRegex(`https?://[^\s]+`).Priority(1).Block(true).Do(bp.handleBiliLink)
 
-	return bp
+	// 返回插件，并注入 Base
+	return builder.Go(bp)
 }
 
 // -------------------- 处理器 --------------------

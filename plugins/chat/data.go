@@ -9,7 +9,7 @@ import (
 // -------------------- 数据持久化 --------------------
 
 func (cp *ChatPlugin) loadPrefs() error {
-	data, err := os.ReadFile(cp.prefsPath)
+	data, err := os.ReadFile(cp.config.PrefsPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil
@@ -24,7 +24,7 @@ func (cp *ChatPlugin) loadPrefs() error {
 }
 
 func (cp *ChatPlugin) savePrefs() error {
-	dir := filepath.Dir(cp.prefsPath)
+	dir := filepath.Dir(cp.config.PrefsPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -37,5 +37,5 @@ func (cp *ChatPlugin) savePrefs() error {
 		return err
 	}
 
-	return os.WriteFile(cp.prefsPath, data, 0644)
+	return os.WriteFile(cp.config.PrefsPath, data, 0644)
 }

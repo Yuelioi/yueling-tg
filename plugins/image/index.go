@@ -19,7 +19,11 @@ func (rg *RandomGenerator) loadOrCreateIndex() error {
 		rg.Log.Warn().Err(err).Msg("加载索引失败，将扫描所有图片")
 	}
 
-	categories := []string{"吃的", "喝的", "玩的", "零食", "老婆", "老公", "美少女", "龙图", "福瑞", "杂鱼", "ba"}
+	categories := []string{}
+
+	for _, category := range rg.config.Categories {
+		categories = append(categories, strings.ToLower(category.Folder))
+	}
 
 	var updatedMu sync.Mutex
 	updated := false
@@ -27,7 +31,7 @@ func (rg *RandomGenerator) loadOrCreateIndex() error {
 
 	for _, category := range categories {
 		g.Go(func() error {
-			folder := filepath.Join("./data/images", category)
+			folder := filepath.Join(rg.config.ImagesFolder, category)
 			if _, err := os.Stat(folder); os.IsNotExist(err) {
 				return nil
 			}
@@ -59,7 +63,7 @@ func (rg *RandomGenerator) loadOrCreateIndex() error {
 
 // loadIndex 从文件加载索引
 func (rg *RandomGenerator) loadIndex() error {
-	data, err := os.ReadFile(rg.dbPath)
+	data, err := os.ReadFile(rg.config.DBPath)
 	if err != nil {
 		return err
 	}
@@ -81,12 +85,12 @@ func (rg *RandomGenerator) saveIndex() error {
 	}
 
 	// 确保目录存在
-	dir := filepath.Dir(rg.dbPath)
+	dir := filepath.Dir(rg.config.DBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	return os.WriteFile(rg.dbPath, data, 0644)
+	return os.WriteFile(rg.config.DBPath, data, 0644)
 }
 
 // scanFolder 扫描文件夹，更新索引

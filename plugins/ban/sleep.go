@@ -6,7 +6,6 @@ import (
 
 	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 )
 
 var _ plugin.Plugin = (*SleepPlugin)(nil)
@@ -31,7 +30,6 @@ var pluginInfo = &plugin.PluginInfo{
 
 func New() plugin.Plugin {
 	p := &SleepPlugin{
-		Base: plugin.NewBase(pluginInfo),
 		sleepWords: []string{
 			"被梦魇抓走了",
 			"被僵尸吃掉了脑子",
@@ -44,13 +42,7 @@ func New() plugin.Plugin {
 		},
 	}
 
-	sleepHandler := handler.NewHandler(p.handleSleep)
-	sleepMatcher := plugin.OnFullMatch([]string{"我要睡觉"}, sleepHandler).
-		SetPriority(10)
-
-	p.AddMatcher(sleepMatcher)
-
-	return p
+	return plugin.New().OnFullMatch("我要睡觉").Do(p.handleSleep).Info(pluginInfo).Go(p)
 }
 
 // -------------------- 处理器 --------------------

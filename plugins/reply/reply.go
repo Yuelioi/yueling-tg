@@ -9,8 +9,8 @@ import (
 	"sync"
 
 	"yueling_tg/internal/core/context"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 	"yueling_tg/pkg/plugin/params"
 )
 
@@ -35,25 +35,18 @@ type ReplyDB struct {
 
 // -------------------- 插件结构 --------------------
 
+type PluginConfig struct {
+	DBPath string `mapstructure:"db_path"`
+}
+
 type ReplyPlugin struct {
 	*plugin.Base
 	db     *ReplyDB
-	dbPath string
+	config PluginConfig
 }
 
 func New() plugin.Plugin {
 	rp := &ReplyPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "reply",
-			Name:        "应答系统",
-			Description: "基于关键词回复设定内容",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "添加回复 <关键词> <回复内容>\n删除回复 <ID>\n更新回复\n查看回复",
-			Group:       "系统",
-			Extra:       make(map[string]any),
-		}),
-		dbPath: "./data/reply.json",
 		db: &ReplyDB{
 			Replies: make([]*ReplyData, 0),
 			NextID:  1,
@@ -61,50 +54,55 @@ func New() plugin.Plugin {
 		},
 	}
 
-	// 加载数据
-	if err := rp.loadData(); err != nil {
-		rp.Log.Warn().Err(err).Msg("加载回复数据失败，使用空数据库")
-	} else {
-		rp.Log.Info().Msgf("加载了 %d 条回复数据", len(rp.db.Replies))
+	// 插件信息
+	info := &plugin.PluginInfo{
+		ID:          "reply",
+		Name:        "应答系统",
+		Description: "基于关键词回复设定内容",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "添加回复 <关键词> <回复内容>\n删除回复 <ID>\n更新回复\n查看回复",
+		Group:       "系统",
+		Extra:       make(map[string]any),
 	}
 
-	// 更新索引
+	// 默认配置
+	defaultCfg := PluginConfig{
+		DBPath: "./data/reply.json",
+	}
+
+	// 加载或创建配置
+	if err := config.GetPluginConfigOrDefault(info.ID, &rp.config, defaultCfg); err != nil {
+		panic(fmt.Sprintf("加载插件配置失败: %v", err))
+	}
+
+	// 初始化 Builder
+	builder := plugin.New().Info(info)
+
+	// 普通消息匹配（低优先级）
+	builder.OnMessage().Priority(1).Do(rp.handleReply)
+
+	// 添加、删除、更新、查看回复命令
+	builder.OnCommand("添加回复").Priority(10).Do(rp.handleAddReply)
+	builder.OnCommand("删除回复").Priority(10).Do(rp.handleDeleteReply)
+	builder.OnCommand("更新回复").Priority(10).Do(rp.handleUpdateReply)
+	builder.OnCommand("查看回复").Priority(10).Do(rp.handleListReply)
+
+	// 返回插件，并注入 Base
+	return builder.Go(rp)
+}
+
+func (rp *ReplyPlugin) Init() error {
+
+	// 加载数据
+	if err := rp.loadData(); err != nil {
+		rp.Log.Warn().Msgf("⚠️ 加载回复数据失败，使用空数据库: %v", err)
+	} else {
+		rp.Log.Info().Msgf("已加载 %d 条回复数据", len(rp.db.Replies))
+	}
 	rp.updateIndex()
+	return nil
 
-	// 普通消息匹配
-	replyHandler := handler.NewHandler(rp.handleReply)
-	replyMatcher := plugin.OnMessage(replyHandler).
-		SetPriority(1) // 低优先级，让其他命令先处理
-
-	// 添加回复命令
-	addHandler := handler.NewHandler(rp.handleAddReply)
-	addMatcher := plugin.OnCommand([]string{"添加回复"}, true, addHandler).
-		SetPriority(10)
-
-	// 删除回复命令
-	deleteHandler := handler.NewHandler(rp.handleDeleteReply)
-	deleteMatcher := plugin.OnCommand([]string{"删除回复"}, true, deleteHandler).
-		SetPriority(10)
-
-	// 更新回复命令
-	updateHandler := handler.NewHandler(rp.handleUpdateReply)
-	updateMatcher := plugin.OnCommand([]string{"更新回复"}, true, updateHandler).
-		SetPriority(10)
-
-	// 查看回复命令
-	listHandler := handler.NewHandler(rp.handleListReply)
-	listMatcher := plugin.OnCommand([]string{"查看回复"}, true, listHandler).
-		SetPriority(10)
-
-	rp.SetMatchers([]*plugin.Matcher{
-		replyMatcher,
-		addMatcher,
-		deleteMatcher,
-		updateMatcher,
-		listMatcher,
-	})
-
-	return rp
 }
 
 // -------------------- 处理器 --------------------
@@ -303,7 +301,7 @@ func (rp *ReplyPlugin) updateIndex() {
 
 // loadData 从文件加载数据
 func (rp *ReplyPlugin) loadData() error {
-	data, err := os.ReadFile(rp.dbPath)
+	data, err := os.ReadFile(rp.config.DBPath)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil // 文件不存在，使用空数据库
@@ -327,7 +325,7 @@ func (rp *ReplyPlugin) loadData() error {
 // saveData 保存数据到文件
 func (rp *ReplyPlugin) saveData() error {
 	// 确保目录存在
-	dir := filepath.Dir(rp.dbPath)
+	dir := filepath.Dir(rp.config.DBPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
@@ -340,5 +338,5 @@ func (rp *ReplyPlugin) saveData() error {
 		return err
 	}
 
-	return os.WriteFile(rp.dbPath, data, 0644)
+	return os.WriteFile(rp.config.DBPath, data, 0644)
 }

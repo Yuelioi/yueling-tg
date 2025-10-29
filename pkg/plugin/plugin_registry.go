@@ -113,7 +113,7 @@ func (pr *PluginRegistry) RegisterPlugins(ps ...Plugin) error {
 					Err(err).
 					Str("插件ID", metadata.ID).
 					Msg("插件初始化失败")
-				return fmt.Errorf("插件[%s]初始化失败: %w", metadata.ID, err)
+				panic(fmt.Errorf("插件[%s]初始化失败: %w", metadata.ID, err))
 			}
 		}
 
@@ -124,7 +124,7 @@ func (pr *PluginRegistry) RegisterPlugins(ps ...Plugin) error {
 					Err(err).
 					Str("插件ID", metadata.ID).
 					Msg("插件加载失败")
-				return fmt.Errorf("插件[%s]加载失败: %w", metadata.ID, err)
+				panic(fmt.Errorf("插件[%s]加载失败: %w", metadata.ID, err))
 			}
 		}
 
@@ -135,7 +135,7 @@ func (pr *PluginRegistry) RegisterPlugins(ps ...Plugin) error {
 					Err(err).
 					Str("插件ID", metadata.ID).
 					Msg("插件验证失败")
-				return fmt.Errorf("插件[%s]验证失败: %w", metadata.ID, err)
+				panic(fmt.Errorf("插件[%s]验证失败: %w", metadata.ID, err))
 			}
 		}
 
@@ -182,7 +182,6 @@ func (pr *PluginRegistry) Plugins() []Plugin {
 		plugins = append(plugins, p)
 	}
 
-	pr.logger.Debug().Int("插件数量", len(plugins)).Msg("获取插件列表")
 	return plugins
 }
 

@@ -3,7 +3,6 @@ package recall
 import (
 	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 )
 
 var _ plugin.Plugin = (*RecallPlugin)(nil)
@@ -15,27 +14,24 @@ type RecallPlugin struct {
 }
 
 func New() plugin.Plugin {
-	rp := &RecallPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "recall",
-			Name:        "撤回消息",
-			Description: "撤回你发送的消息，并回复提示",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "撤回",
-			Group:       "娱乐",
-			Extra:       make(map[string]any),
-		},
-		),
+	rp := &RecallPlugin{}
+
+	info := &plugin.PluginInfo{
+		ID:          "recall",
+		Name:        "撤回消息",
+		Description: "撤回你发送的消息，并回复提示",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "撤回",
+		Group:       "娱乐",
+		Extra:       make(map[string]any),
 	}
 
-	recallHandler := handler.NewHandler(rp.handleRecall)
-	recallMatcher := plugin.OnFullMatch([]string{"撤回"}, recallHandler).
-		SetPriority(10).SetBlock(true)
+	builder := plugin.New().Info(info)
 
-	rp.AddMatcher(recallMatcher)
-	return rp
+	builder.OnFullMatch("撤回").Block(true).Do(rp.handleRecall)
 
+	return builder.Go(rp)
 }
 
 // -------------------- 处理器 --------------------

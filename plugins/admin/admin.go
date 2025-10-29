@@ -21,20 +21,20 @@ type AdminPlugin struct {
 }
 
 func New() plugin.Plugin {
-	ap := &AdminPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "admin",
-			Name:        "管理员管理",
-			Description: "设置和管理群组管理员",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "设置管理员 @user / 取消管理员 @user / 管理员列表",
-			Group:       "管理",
-		}),
+	ap := &AdminPlugin{}
+
+	info := &plugin.PluginInfo{
+		ID:          "admin",
+		Name:        "管理员管理",
+		Description: "设置和管理群组管理员",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "设置管理员（回复用户消息）/ 取消管理员（回复用户消息）/ 管理员列表",
+		Group:       "管理",
 	}
 
 	builder := plugin.New().
-		Info(ap.PluginInfo())
+		Info(info)
 
 	// 命令处理 - 需要是群主或有权限的管理员才能使用
 	builder.OnCommand("设置管理员").When(permission.GroupOwner()).Block(true).Do(ap.handlePromoteAdmin)
@@ -44,7 +44,7 @@ func New() plugin.Plugin {
 	builder.OnCommand("解除禁言").When(permission.GroupAdminOrOwner()).Block(true).Do(ap.handleUnmute)
 	builder.OnCommand("踢出").When(permission.GroupAdminOrOwner()).Block(true).Do(ap.handleKick)
 
-	return builder.Go()
+	return builder.Go(ap)
 }
 
 // -------------------- 命令处理 --------------------

@@ -12,8 +12,8 @@ import (
 	"time"
 
 	ctxx "yueling_tg/internal/core/context"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 	"yueling_tg/pkg/plugin/params"
 
 	"github.com/sashabaranov/go-openai"
@@ -49,69 +49,79 @@ type SimplifiedMessage struct {
 
 type ChatPlugin struct {
 	*plugin.Base
+	aiClient *openai.Client
 
+	config    PluginConfig
 	userPrefs *UserPrefsDB
-	prefsPath string
-	apiKey    string
-	baseURL   string
-	aiClient  *openai.Client
-	botSelfID int64
-	ownerID   int64
+}
+
+// PluginConfig 插件配置
+type PluginConfig struct {
+	PrefsPath string `mapstructure:"prefs_path"`  // 偏好设置文件路径
+	APIKey    string `mapstructure:"api_key"`     // 接口密钥
+	BaseURL   string `mapstructure:"base_url"`    // 接口基础地址
+	BotSelfID int64  `mapstructure:"bot_self_id"` // 机器人自身ID
+	OwnerID   int64  `mapstructure:"owner_id"`    // 机器人所有者ID
 }
 
 func New() plugin.Plugin {
-	cp := &ChatPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "chat",
-			Name:        "聊天功能",
-			Description: "提供基于 AI 的智能聊天功能",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "@机器人 + 内容\n查看好感度",
-			Group:       "娱乐",
-			Extra:       make(map[string]any),
-		}),
+	info := &plugin.PluginInfo{
+		ID:          "chat",
+		Name:        "聊天功能",
+		Description: "提供基于 AI 的智能聊天功能",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "@机器人 + 内容 / 查看好感度",
+		Group:       "娱乐",
+		Extra:       make(map[string]any),
+	}
 
-		prefsPath: "./data/user_prefs.json",
-		apiKey:    os.Getenv("DEEPSEEK_API_KEY"),
-		baseURL:   "https://api.deepseek.com/v1",
-		ownerID:   6969085595,
+	cp := &ChatPlugin{
 		userPrefs: &UserPrefsDB{
 			Prefs: make(map[string]int),
 		},
 	}
 
-	// 检查 API Key
-	if cp.apiKey == "" {
-		cp.Log.Warn().Msg("DEEPSEEK_API_KEY 未设置，AI 功能将不可用")
+	// 获取配置
+	defaultCfg := cp.getDefaultConfig()
+	if err := config.GetPluginConfigOrDefault(info.ID, &cp.config, defaultCfg); err != nil {
+		panic(fmt.Sprintf("加载插件配置失败: %v", err))
+	}
+
+	// 初始化 AI 客户端
+	if cp.config.APIKey == "" {
+		fmt.Println("[chat] ⚠️ DEEPSEEK_API_KEY 未设置，AI 功能将不可用")
 	} else {
-		// 初始化 OpenAI 客户端
-		config := openai.DefaultConfig(cp.apiKey)
-		config.BaseURL = cp.baseURL
-		cp.aiClient = openai.NewClientWithConfig(config)
+		cfg := openai.DefaultConfig(cp.config.APIKey)
+		cfg.BaseURL = cp.config.BaseURL
+		cp.aiClient = openai.NewClientWithConfig(cfg)
 	}
 
-	// 加载用户偏好
+	// 加载偏好设置
 	if err := cp.loadPrefs(); err != nil {
-		cp.Log.Warn().Err(err).Msg("加载用户偏好失败，使用默认值")
+		fmt.Printf("[chat] ⚠️ 加载用户偏好失败: %v，使用默认值\n", err)
 	}
 
-	// AI 聊天
-	chatHandler := handler.NewHandler(cp.handleChat)
-	chatMatcher := plugin.OnMessage(chatHandler).
-		SetPriority(1) // 低优先级
+	// 构建插件命令
+	builder := plugin.New().Info(info)
+
+	// 聊天消息
+	builder.OnMessage().Priority(1).Do(cp.handleChat)
 
 	// 查看好感度
-	likeHandler := handler.NewHandler(cp.handleLike)
-	likeMatcher := plugin.OnCommand([]string{"查看好感度", "查询好感度", "好感度"}, true, likeHandler).
-		SetPriority(10)
+	builder.OnCommand("查看好感度", "查询好感度", "好感度").Block(true).Do(cp.handleLike)
 
-	cp.SetMatchers([]*plugin.Matcher{
-		chatMatcher,
-		likeMatcher,
-	})
+	return builder.Go(cp)
+}
 
-	return cp
+func (cp *ChatPlugin) getDefaultConfig() PluginConfig {
+	return PluginConfig{
+		PrefsPath: "./data/user_prefs.json",
+		APIKey:    os.Getenv("DEEPSEEK_API_KEY"),
+		BaseURL:   "https://api.deepseek.com/v1",
+		BotSelfID: 0,
+		OwnerID:   123456789,
+	}
 }
 
 // -------------------- 处理器 --------------------
@@ -120,8 +130,8 @@ func New() plugin.Plugin {
 func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 
 	// 获取 Bot 自己的 ID
-	if cp.botSelfID == 0 {
-		cp.botSelfID, _ = ctx.GetBotID()
+	if cp.config.BotSelfID == 0 {
+		cp.config.BotSelfID, _ = ctx.GetBotID()
 	}
 
 	text := strings.TrimSpace(msg.Text)
@@ -131,7 +141,7 @@ func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 
 	// 检查是否被 @ 或以 "chat" 开头
 	isAtBot := false
-	if msg.ReplyToMessage != nil && msg.ReplyToMessage.From.ID == cp.botSelfID {
+	if msg.ReplyToMessage != nil && msg.ReplyToMessage.From.ID == cp.config.BotSelfID {
 		isAtBot = true
 	}
 
@@ -200,7 +210,7 @@ func (cp *ChatPlugin) chatAI(content string, userID int64, username string, ctx 
 	info := cp.getRelationshipInfo(userLike)
 
 	// 特殊处理：如果是主人
-	if userID == cp.ownerID {
+	if userID == cp.config.OwnerID {
 		info.Relationship = "父亲"
 	}
 

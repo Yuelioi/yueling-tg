@@ -17,6 +17,7 @@
     ".env"
   ],
   "cSpell.words": [
+    "mapstructure",
     "tgbotapi"
   ]
 }

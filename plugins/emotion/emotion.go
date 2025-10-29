@@ -8,6 +8,7 @@ import (
 
 	"yueling_tg/internal/core/context"
 	"yueling_tg/internal/message"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
 
 	"github.com/mymmrac/telego"
@@ -15,41 +16,53 @@ import (
 
 var _ plugin.Plugin = (*EmotePlugin)(nil)
 
+type PluginConfig struct {
+	DataPath string `mapstructure:"data_path"`
+}
+
 type EmotePlugin struct {
 	*plugin.Base
-	path string
+	path   string
+	config PluginConfig
 }
 
 // -------------------- 插件入口 --------------------
 
 func New() plugin.Plugin {
+	info := &plugin.PluginInfo{
+		ID:          "emote",
+		Name:        "随机表情包",
+		Description: "根据参数随机发送一张表情包/查询表情包列表",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "#/##[关键词]",
+		Group:       "图库",
+		Extra:       make(map[string]any),
+	}
 	ep := &EmotePlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "emote",
-			Name:        "随机表情包",
-			Description: "根据参数随机发送一张表情包/查询表情包列表",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "#/##[关键词]",
-			Group:       "图库",
-			Extra:       make(map[string]any),
-		}),
 		path: "data/images/表情",
 	}
 
+	if err := config.GetPluginConfigOrDefault(info.ID, &ep.config, PluginConfig{
+		DataPath: "data/images/表情",
+	}); err != nil {
+		ep.Log.Error().Err(err).Msg("加载插件配置失败")
+		return nil
+	}
+
 	builder := plugin.New().
-		Info(ep.PluginInfo())
+		Info(info)
 
 	// 消息匹配器
 	builder.OnMessage().
 		Do(ep.emoteHandler)
 
-	// 再来一张按钮（回调）
-	builder.OnCallbackStartsWith(ep.PluginInfo().ID).
-		Priority(9).
+	// 再来一张按钮
+	builder.OnCallbackStartsWith(info.ID).
+		Priority(9).Block(true).
 		Do(ep.another)
 
-	return builder.Go()
+	return builder.Go(ep)
 }
 
 // -------------------- 消息处理 --------------------
@@ -163,7 +176,6 @@ func (ep *EmotePlugin) sendPhoto(c *context.Context, file string, query string) 
 	photo := message.NewResource(file)
 
 	buttons := ep.createButton(query)
-
 	c.SendPhotoWithMarkup(photo, buttons)
 }
 

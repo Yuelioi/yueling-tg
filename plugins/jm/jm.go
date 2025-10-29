@@ -13,8 +13,8 @@ import (
 	"time"
 	"yueling_tg/internal/core/context"
 	"yueling_tg/internal/message"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
-	"yueling_tg/pkg/plugin/handler"
 	"yueling_tg/pkg/plugin/params"
 
 	"github.com/jung-kurt/gofpdf"
@@ -34,12 +34,49 @@ var (
 type JMPlugin struct {
 	*plugin.Base
 	client *JmClient
+	config PluginConfig
+}
+
+type PluginConfig struct {
+	ProxyURL string `json:"proxy_url"`
+	SaveDir  string `json:"save_dir"`
 }
 
 func New() *JMPlugin {
+	jm := &JMPlugin{}
+
+	// 插件信息
+	info := &plugin.PluginInfo{
+		ID:          "jm",
+		Name:        "JM 下载器",
+		Description: "下载 JM 漫画并生成 PDF",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "jm <书籍ID> [章节号]",
+		Group:       "娱乐",
+		Extra:       make(map[string]any),
+	}
+
+	// 默认配置
+	defaultCfg := PluginConfig{
+		ProxyURL: "http://127.0.0.1:7890",
+		SaveDir:  "./data/downloads",
+	}
+
+	// 加载或创建配置
+	if err := config.GetPluginConfigOrDefault(info.ID, &jm.config, defaultCfg); err != nil {
+		panic(fmt.Sprintf("加载插件配置失败: %v", err))
+	}
+
+	// 初始化 Builder
+	builder := plugin.New().Info(info)
+
+	// 注册命令
+	builder.OnCommand("jm").Priority(1).Do(jm.handleJM)
+
 	// 创建带代理的 HTTP 客户端
 	transport := &http.Transport{
-		Proxy: http.ProxyURL(MustParseURL(ProxyURL)),
+		Proxy: http.ProxyURL(MustParseURL(jm.config.ProxyURL)),
 	}
 
 	client := &http.Client{
@@ -47,27 +84,12 @@ func New() *JMPlugin {
 		Timeout:   10 * time.Second,
 	}
 
-	jmClient := NewJmClient(client).WithConcurrency(8).WithSaveDir(SaveDir)
+	jm.client = NewJmClient(client).
+		WithConcurrency(8).
+		WithSaveDir(jm.config.SaveDir)
 
-	jm := &JMPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "jm",
-			Name:        "JM 下载器",
-			Description: "下载 JM 漫画并生成 PDF",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "jm <书籍ID> [章节号]",
-			Group:       "娱乐",
-			Extra:       make(map[string]any),
-		}),
-		client: jmClient,
-	}
-
-	matcher := plugin.OnCommand([]string{"jm", "JM"}, true, handler.NewHandler(jm.handleJM)).
-		SetPriority(1)
-
-	jm.AddMatcher(matcher)
-	return jm
+	// 返回插件并注入 Base
+	return builder.Go(jm).(*JMPlugin)
 }
 
 // -------------------- 主处理函数 --------------------

@@ -9,6 +9,7 @@ import (
 	"yueling_tg/internal/core"
 	logx "yueling_tg/internal/core/log"
 	"yueling_tg/internal/middleware"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
 
 	"github.com/mymmrac/telego"
@@ -37,7 +38,7 @@ func (z ZerologWrapper) Errorf(format string, args ...any) {
 }
 
 // 创建一个新的 Bot 实例
-func NewBot(botToken string, client *http.Client) (*Bot, error) {
+func NewBot(botToken, configPath string, client *http.Client) (*Bot, error) {
 	loggerWrapper := ZerologWrapper{}
 
 	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger(), telego.WithHTTPClient(client), telego.WithLogger(loggerWrapper))
@@ -45,6 +46,8 @@ func NewBot(botToken string, client *http.Client) (*Bot, error) {
 		fmt.Println(err)
 		os.Exit(1)
 	}
+
+	config.InitConfigManager(configPath)
 
 	b, err := bot.GetMe(context.Background())
 	if err != nil {

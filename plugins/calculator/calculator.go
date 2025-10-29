@@ -18,25 +18,22 @@ type CalculatorPlugin struct {
 }
 
 func New() plugin.Plugin {
-	cp := &CalculatorPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "calculator",
-			Name:        "计算器",
-			Description: "支持加减乘除、比较、位运算、安全计算",
-			Version:     "1.0.0",
-			Author:      "月离",
-			Usage:       "计算 <表达式>\n示例：计算 12*21 + 5",
-			Extra: map[string]any{
-				"group":    "工具",
-				"commands": []string{"计算"},
-			},
-			Group: "工具",
-		}),
+	info := &plugin.PluginInfo{
+		ID:          "calculator",
+		Name:        "计算器",
+		Description: "支持加减乘除、比较、位运算、安全计算",
+		Version:     "1.0.0",
+		Author:      "月离",
+		Usage:       "计算 <表达式>\n示例：计算 12*21 + 5",
+		Extra: map[string]any{
+			"group":    "工具",
+			"commands": []string{"计算"},
+		},
+		Group: "工具",
 	}
+	cp := &CalculatorPlugin{}
 
-	return plugin.New().
-		Info(cp.PluginInfo()).
-		OnCommand("计算").Do(cp.calcHandler).Go()
+	return plugin.New().Info(info).OnCommand("计算").Block(true).Do(cp.calcHandler).Go(cp)
 }
 
 // 处理器

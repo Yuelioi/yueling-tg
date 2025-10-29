@@ -1,0 +1,32 @@
+[plugins]
+[plugins.chat]
+api_key = ''
+base_url = 'https://api.deepseek.com/v1'
+bot_self_id = 0
+owner_id = 0
+prefs_path = './data/chat/user_prefs.json'
+
+[plugins.emote]
+data_path = 'data/images/表情'
+
+[plugins.fortune]
+storage = './data/fortune'
+
+[plugins.image]
+db_path = './data/images/index.json'
+images_folder = './data/images'
+
+[[plugins.image.categories]]
+caption = '今天吃这个吧！🍜'
+commands = ['吃什么', '今天吃啥', '该吃什么了']
+count = 4
+folder = '吃的'
+grid_width = 750
+message_template = '今天我们来点 %s 吧～ 😋'
+
+
+[plugins.reply]
+db_path = './data/reply.json'
+
+[plugins.sticker]
+db_path = './data/botsticker.json'

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"reflect"
 	"yueling_tg/pkg/plugin/dsl/condition"
 	"yueling_tg/pkg/plugin/dsl/permission"
 	"yueling_tg/pkg/plugin/handler"
@@ -38,12 +39,48 @@ func (p *pluginBuilder) addMatcher(m *Matcher) *pluginBuilder {
 }
 
 // Build finalizes and returns the plugin instance.
-func (p *pluginBuilder) Go() *Base {
+func (p *pluginBuilder) Go(parents ...any) Plugin {
 	plg := NewBase(p.info)
 
+	// 注册匹配器
 	for _, m := range p.matchers {
 		plg.AddMatcher(m)
 	}
+
+	// 遍历传入的父级
+	for _, parent := range parents {
+		if parent == nil {
+			continue
+		}
+
+		// 判断是否实现了 Plugin 接口
+		pluginParent, ok := parent.(Plugin)
+		if !ok {
+			continue
+		}
+
+		// 反射拿到结构体指针
+		v := reflect.ValueOf(parent)
+		if v.Kind() != reflect.Ptr || v.IsNil() {
+			continue
+		}
+
+		elem := v.Elem()
+
+		// 查找 Base 字段
+		field := elem.FieldByName("Base")
+		if !field.IsValid() || !field.CanSet() {
+			continue
+		}
+
+		// 确认类型可以赋值
+		if field.Type().AssignableTo(reflect.TypeOf(plg)) {
+			field.Set(reflect.ValueOf(plg))
+			return pluginParent // ✅ 返回 parent，而不是 plg
+		}
+	}
+
+	// 如果没传父级或不满足条件，则直接返回 plg
 	return plg
 }
 

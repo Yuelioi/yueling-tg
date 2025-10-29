@@ -10,13 +10,19 @@ import (
 func CommandContextProvider(cmds []string) Provider {
 	return DynamicProvider(func(ctx *context.Context) any {
 		msg := ctx.GetMessage()
-		if msg == nil || msg.Text == "" {
+		var text string
+
+		// 优先使用消息文本，如果没有，则使用 caption
+		if msg != nil && msg.Text != "" {
+			text = msg.Text
+		} else if ctx.GetCaption() != "" {
+			text = ctx.GetCaption()
+		} else {
 			return params.CommandContext{
 				RawText: "",
 			}
 		}
 
-		text := msg.Text
 		matchedCmd := ""
 
 		// 找到匹配的命令

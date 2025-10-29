@@ -10,6 +10,7 @@ import (
 
 	"yueling_tg/internal/core/context"
 	"yueling_tg/internal/message"
+	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
 
 	"github.com/mymmrac/telego"
@@ -20,27 +21,34 @@ var _ plugin.Plugin = (*RandomGenerator)(nil)
 
 // -------------------- 配置结构 --------------------
 
-type RandomConfig struct {
-	Command         string // 触发命令
-	Folder          string // 对应文件夹
-	Caption         string // 图片说明
-	FontPath        string // 字体路径
-	GridWidth       int    // 宫格宽度
-	Count           int    // 抽取数量（1=单图，≥4=宫格）
-	MessageTemplate string
+// PluginConfig 插件整体配置
+type PluginConfig struct {
+	DBPath       string           `mapstructure:"db_path"`
+	ImagesFolder string           `mapstructure:"images_folder"`
+	Categories   []CategoryConfig `mapstructure:"categories"`
+}
+
+// CategoryConfig 单个分类配置
+type CategoryConfig struct {
+	Commands        []string `mapstructure:"commands"`         // 触发命令列表，如 ["吃什么", "今天吃啥"]
+	Folder          string   `mapstructure:"folder"`           // 对应文件夹
+	Caption         string   `mapstructure:"caption"`          // 图片说明
+	GridWidth       int      `mapstructure:"grid_width"`       // 宫格宽度
+	Count           int      `mapstructure:"count"`            // 抽取数量（1=单图，≥4=宫格）
+	MessageTemplate string   `mapstructure:"message_template"` // 消息模板
 }
 
 // -------------------- 图片哈希索引 --------------------
 
 type ImageIndex struct {
-	Hash     string `json:"hash"`     // 文件 SHA1 哈希
-	Path     string `json:"path"`     // 文件完整路径
-	Category string `json:"category"` // 所属分类
-	Filename string `json:"filename"` // 文件名
+	Hash     string `json:"hash"`
+	Path     string `json:"path"`
+	Category string `json:"category"`
+	Filename string `json:"filename"`
 }
 
 type ImageIndexDB struct {
-	Images map[string]*ImageIndex `json:"images"` // key 是 hash
+	Images map[string]*ImageIndex `json:"images"`
 	mu     sync.RWMutex
 }
 
@@ -48,83 +56,107 @@ type ImageIndexDB struct {
 
 type RandomGenerator struct {
 	*plugin.Base
-	cfgs    []RandomConfig
+	config  PluginConfig
 	indexDB *ImageIndexDB
-	dbPath  string
 }
 
 // -------------------- 插件入口 --------------------
 
 func New() plugin.Plugin {
 	info := &plugin.PluginInfo{
-		ID:          "random",
-		Name:        "随机图片生成器",
+		ID:          "image",
+		Name:        "图片管理",
 		Description: "支持 吃什么 / 喝什么 / 玩什么 / 美少女 / 龙图 等指令",
-		Version:     "1.2.0",
+		Version:     "1.3.0",
 		Author:      "月离",
 		Group:       "图库",
 		Extra:       make(map[string]any),
 	}
-	font := "./data/fonts/华康新综艺简繁W7.ttf"
 
 	rg := &RandomGenerator{
-		dbPath: "./data/images/index.json",
-		cfgs: []RandomConfig{
-			{"吃什么", "吃的", "今天吃这个吧！🍜", font, 750, 4, "今天我们来点 %s 吧～ 😋"},
-			{"喝什么", "喝的", "喝一杯？☕", font, 750, 4, "来杯 %s 吧～ ☕"},
-			{"玩什么", "玩的", "玩这个吧～ 🎮", font, 750, 4, "玩玩 %s 怎么样～ 🎮"},
-			{"来点零食", "零食", "来点小零食吧 🍪", font, 750, 4, "尝尝 %s 吧～ 🍪"},
-			{"我老婆呢", "老婆", "", font, 750, 1, ""},
-			{"我老公呢", "老公", "", font, 750, 1, ""},
-			{"美少女", "美少女", "", font, 750, 1, ""},
-			{"龙图", "龙图", "", font, 750, 1, ""},
-			{"福瑞", "福瑞", "", font, 750, 1, ""},
-			{"杂鱼", "杂鱼", "", font, 750, 1, ""},
-			{"ba", "ba", "", font, 750, 1, ""},
+		indexDB: &ImageIndexDB{
+			Images: make(map[string]*ImageIndex),
 		},
+		config: PluginConfig{},
+	}
+
+	// 获取配置
+	defaultConfig := rg.getDefaultConfig()
+	if err := config.GetPluginConfigOrDefault(info.ID, &rg.config, defaultConfig); err != nil {
+		panic(fmt.Sprintf("加载插件配置失败: %v", err))
+	}
+
+	builder := plugin.New().Info(info)
+
+	// 注册随机图片命令
+	for _, cat := range rg.config.Categories {
+		for _, cmd := range cat.Commands {
+			builder.OnFullMatch(cmd).Do(func(c *context.Context) {
+				rg.handleCommand(c, cat)
+			})
+		}
 	}
 
 	// 添加图片命令
-	addCommands := []string{
-		"添加老婆", "添加老公", "添加龙图", "添加福瑞", "添加杂鱼",
-		"添加吃的", "添加喝的", "添加玩的", "添加零食", "添加美少女", "添加ba",
-	}
-
-	// 初始化索引数据库
-	rg.indexDB = &ImageIndexDB{
-		Images: make(map[string]*ImageIndex),
-	}
-
-	builder := plugin.New().
-		Info(info)
-
-	// 随机图片命令
-	for _, cfg := range rg.cfgs {
-		c := cfg
-		builder.OnFullMatch(c.Command).Do(func(c *context.Context) {
-			rg.handleCommand(c, cfg)
-		})
-	}
-
+	addCommands := rg.generateAddCommands()
 	builder.OnCommand(addCommands...).Do(rg.handleAddImage)
 
-	// 删除图片命令，阻止传播
+	// 删除图片命令
 	builder.OnCommand("删除图片").Block(true).Do(rg.handleDeleteImage)
 
-	// 回调命令，设置高优先级
-	builder.OnCallbackStartsWith(info.ID).Priority(9).Do(rg.another)
+	// 回调命令
+	builder.OnCallbackStartsWith(info.ID).Priority(9).Do(rg.handleAnother)
 
-	rg.Base = builder.Go()
+	return builder.Go(rg)
+}
 
-	// 加载或创建索引
+func (rg *RandomGenerator) Init() error {
 	if err := rg.loadOrCreateIndex(); err != nil {
 		rg.Log.Error().Err(err).Msg("初始化图片索引失败")
 	}
-	return rg
+	return nil
+}
+
+// getDefaultConfig 获取默认配置
+func (rg *RandomGenerator) getDefaultConfig() PluginConfig {
+
+	return PluginConfig{
+		DBPath: "./data/images/index.json",
+		Categories: []CategoryConfig{
+			{
+				Commands:        []string{"吃什么", "今天吃啥"},
+				Folder:          "吃的",
+				Caption:         "今天吃这个吧！🍜",
+				GridWidth:       750,
+				Count:           4,
+				MessageTemplate: "今天我们来点 %s 吧～ 😋",
+			},
+		},
+	}
+}
+
+// generateAddCommands 根据配置生成添加图片命令
+func (rg *RandomGenerator) generateAddCommands() []string {
+	var commands []string
+	for _, cat := range rg.config.Categories {
+		commands = append(commands, "添加"+cat.Folder)
+	}
+	return commands
+}
+
+// findCategoryByFolder 根据文件夹名查找分类配置
+func (rg *RandomGenerator) findCategoryByFolder(folder string) *CategoryConfig {
+	for _, cat := range rg.config.Categories {
+		if cat.Folder == folder {
+			return &cat
+		}
+	}
+	return nil
 }
 
 // -------------------- 再来一张 --------------------
-func (rg *RandomGenerator) another(cmd string, c *context.Context) error {
+
+func (rg *RandomGenerator) handleAnother(cmd string, c *context.Context) error {
 	rg.Log.Debug().Str("from", cmd).Msg("收到随机按钮点击")
 
 	parts := strings.Split(cmd, "_")
@@ -167,7 +199,6 @@ func (rg *RandomGenerator) another(cmd string, c *context.Context) error {
 	}
 
 	c.AnswerCallback("已换一张 🔄")
-
 	return nil
 }
 
@@ -186,10 +217,11 @@ func (rg *RandomGenerator) createButton(folder string) telego.InlineKeyboardMark
 
 // -------------------- 逻辑核心 --------------------
 
-func (rg *RandomGenerator) handleCommand(c *context.Context, cfg RandomConfig) {
+func (rg *RandomGenerator) handleCommand(c *context.Context, cfg CategoryConfig) {
 	rg.Log.Debug().
 		Str("from", c.GetUsername()).
-		Str("cmd", cfg.Command).
+		Strs("commands", cfg.Commands).
+		Str("folder", cfg.Folder).
 		Msg("收到随机命令")
 
 	folder := filepath.Join("./data/images", cfg.Folder)
@@ -240,17 +272,16 @@ func (rg *RandomGenerator) selectImages(folder string, count int) ([]string, err
 	return imgPaths[:count], nil
 }
 
-func (rg *RandomGenerator) sendSinglePhoto(c *context.Context, cfg RandomConfig, imgPath string) {
+func (rg *RandomGenerator) sendSinglePhoto(c *context.Context, cfg CategoryConfig, imgPath string) {
 	rg.Log.Debug().Str("file", imgPath).Msg("选取单图发送")
 
 	photo := message.NewResource(imgPath).WithCaption(cfg.Caption)
-
-	buttons := rg.createButton(cfg.Command)
+	buttons := rg.createButton(cfg.Folder)
 
 	c.SendPhotoWithMarkup(photo, buttons)
 }
 
-func (rg *RandomGenerator) sendMediaGroup(c *context.Context, cfg RandomConfig, imgPaths []string) {
+func (rg *RandomGenerator) sendMediaGroup(c *context.Context, cfg CategoryConfig, imgPaths []string) {
 	n := len(imgPaths)
 	resources := make([]message.Resource, n)
 	var names []string

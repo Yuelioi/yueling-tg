@@ -66,7 +66,7 @@ func main() {
 		logger.Info().Msgf("已使用环境变量设置代理: HTTP_PROXY=%s", httpProxy)
 	}
 
-	b, err := bot.NewBot(botToken, client)
+	b, err := bot.NewBot(botToken, "./config.toml", client)
 	if err != nil {
 		logger.Panic().Msg("创建 Bot 失败")
 	}

@@ -36,6 +36,16 @@ type URLResult struct {
 	Size int    `json:"size"`
 }
 
+var info = &plugin.PluginInfo{
+	ID:          "music",
+	Name:        "点歌插件",
+	Description: "支持多平台搜索点歌",
+	Version:     "2.0.0",
+	Author:      "月离",
+	Usage:       "点歌 <歌曲名>",
+	Group:       "娱乐",
+}
+
 // 音乐源配置
 var musicSources = []struct {
 	ID   string
@@ -70,16 +80,8 @@ type MusicPlugin struct {
 }
 
 func New() plugin.Plugin {
+
 	mp := &MusicPlugin{
-		Base: plugin.NewBase(&plugin.PluginInfo{
-			ID:          "music",
-			Name:        "点歌插件",
-			Description: "支持多平台搜索点歌",
-			Version:     "2.0.0",
-			Author:      "月离",
-			Usage:       "点歌 <歌曲名>",
-			Group:       "娱乐",
-		}),
 		apiBase:     "https://music-api.gdstudio.xyz/api.php",
 		httpClient:  &http.Client{Timeout: 10 * time.Second},
 		searchCache: make(map[int64]*SearchCache),
@@ -87,23 +89,23 @@ func New() plugin.Plugin {
 	}
 
 	builder := plugin.New().
-		Info(mp.PluginInfo())
+		Info(info)
 
 	// 点歌命令
 	builder.OnStartsWith("点歌").
 		Do(mp.handleSearch)
 
 	// 处理音乐源切换
-	builder.OnCallbackStartsWith(mp.PluginInfo().ID + ":source:").
+	builder.OnCallbackStartsWith(info.ID + ":source:").
 		Priority(9).
 		Do(mp.handleSourceChange)
 
 	// 处理歌曲播放
-	builder.OnCallbackStartsWith(mp.PluginInfo().ID + ":play:").
+	builder.OnCallbackStartsWith(info.ID + ":play:").
 		Priority(9).
 		Do(mp.handlePlay)
 
-	return builder.Go()
+	return builder.Go(mp)
 }
 
 // -------------------- 搜索处理 --------------------
@@ -315,7 +317,7 @@ func (mp *MusicPlugin) showSearchResults(c *context.Context, results []SearchRes
 		}
 
 		// 使用索引而不是ID
-		callbackData := fmt.Sprintf("%s:play:%d", mp.PluginInfo().ID, i)
+		callbackData := fmt.Sprintf("%s:play:%d", info.ID, i)
 
 		buttons = append(buttons, []telego.InlineKeyboardButton{
 			{
@@ -332,7 +334,7 @@ func (mp *MusicPlugin) showSearchResults(c *context.Context, results []SearchRes
 		if src.ID == source {
 			emoji = "✓ "
 		}
-		callbackData := fmt.Sprintf("%s:source:%s", mp.PluginInfo().ID, src.ID)
+		callbackData := fmt.Sprintf("%s:source:%s", info.ID, src.ID)
 
 		sourceButtons = append(sourceButtons, telego.InlineKeyboardButton{
 			Text:         emoji + src.Name,
@@ -371,7 +373,7 @@ func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *telego.Messa
 		}
 
 		// 使用索引而不是ID
-		callbackData := fmt.Sprintf("%s:play:%d", mp.PluginInfo().ID, i)
+		callbackData := fmt.Sprintf("%s:play:%d", info.ID, i)
 
 		buttons = append(buttons, []telego.InlineKeyboardButton{
 			{
@@ -388,7 +390,7 @@ func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *telego.Messa
 		if src.ID == source {
 			emoji = "✓ "
 		}
-		callbackData := fmt.Sprintf("%s:source:%s", mp.PluginInfo().ID, src.ID)
+		callbackData := fmt.Sprintf("%s:source:%s", info.ID, src.ID)
 
 		sourceButtons = append(sourceButtons, telego.InlineKeyboardButton{
 			Text:         emoji + src.Name,
