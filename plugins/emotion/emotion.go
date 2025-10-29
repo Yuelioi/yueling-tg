@@ -10,7 +10,7 @@ import (
 	"yueling_tg/internal/message"
 	"yueling_tg/pkg/plugin"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
 var _ plugin.Plugin = (*EmotePlugin)(nil)
@@ -108,7 +108,6 @@ func (ep *EmotePlugin) emoteHandler(c *context.Context) {
 }
 
 // -------------------- 再来一张 --------------------
-
 func (ep *EmotePlugin) another(cmd string, c *context.Context) error {
 	parts := strings.Split(cmd, "_")
 	if len(parts) != 2 {
@@ -129,33 +128,31 @@ func (ep *EmotePlugin) another(cmd string, c *context.Context) error {
 		return nil
 	}
 
-	choice := files[rand.Intn(len(files))]
-	newPhoto := tgbotapi.NewInputMediaPhoto(tgbotapi.FilePath(choice))
-
 	// 获取原消息
 	msg := c.GetCallbackQuery().Message
 	if msg == nil {
 		ep.Log.Error().Msg("callback没有原消息")
 		return nil
 	}
+	choice := files[rand.Intn(len(files))]
 
 	// 创建按钮
-	buttons := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("再来一张 🔄", ep.PluginInfo().ID+"_"+query),
-		),
-	)
+	buttons := ep.createButton(query)
 
-	edit := tgbotapi.EditMessageMediaConfig{
-		BaseEdit: tgbotapi.BaseEdit{
-			ChatID:      msg.Chat.ID,
-			MessageID:   msg.MessageID,
-			ReplyMarkup: &buttons,
-		},
-		Media: newPhoto,
+	params := &telego.EditMessageMediaParams{
+		ChatID:      c.GetChatID(),
+		MessageID:   msg.GetMessageID(),
+		Media:       message.NewResource(choice).ToInputMedia(),
+		ReplyMarkup: &buttons,
 	}
 
-	c.Api.Send(edit)
+	_, err := c.Api.EditMessageMedia(c.Ctx, params)
+	if err != nil {
+		ep.Log.Error().Err(err).Msg("编辑消息失败")
+		c.AnswerCallback("换图失败 😢")
+		return err
+	}
+
 	c.AnswerCallback("已换一张 🔄")
 	return nil
 }
@@ -170,14 +167,17 @@ func (ep *EmotePlugin) sendPhoto(c *context.Context, file string, query string) 
 	c.SendPhotoWithMarkup(photo, buttons)
 }
 
-func (ep *EmotePlugin) createButton(query string) tgbotapi.InlineKeyboardMarkup {
-	buttons := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("换一张 🔄", ep.PluginInfo().ID+"_"+query),
-		),
-	)
-
-	return buttons
+func (ep *EmotePlugin) createButton(query string) telego.InlineKeyboardMarkup {
+	return telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				telego.InlineKeyboardButton{
+					Text:         "换一张 🔄",
+					CallbackData: ep.PluginInfo().ID + "_" + query,
+				},
+			},
+		},
+	}
 }
 
 func (ep *EmotePlugin) getEmoteFiles(args []string) ([]string, error) {

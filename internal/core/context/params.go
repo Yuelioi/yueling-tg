@@ -3,13 +3,13 @@ package context
 import (
 	"strings"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
 // ============ 消息获取方法 ============
 
 // GetMessage 获取消息，优先顺序：普通>普通编辑>频道>频道编辑
-func (c *Context) GetMessage() *tgbotapi.Message {
+func (c *Context) GetMessage() *telego.Message {
 	if c.Update.Message != nil {
 		return c.Update.Message
 	}
@@ -23,14 +23,14 @@ func (c *Context) GetMessage() *tgbotapi.Message {
 		return c.Update.EditedChannelPost
 	}
 	if c.Update.CallbackQuery != nil && c.Update.CallbackQuery.Message != nil {
-		return c.Update.CallbackQuery.Message
+		return c.Update.CallbackQuery.Message.Message()
 	}
 	return nil
 }
 
 // 获取bot id
 func (c *Context) GetBotID() (int64, error) {
-	bot, err := c.Api.GetMe()
+	bot, err := c.Api.GetMe(c.Ctx)
 	if err != nil {
 		return 0, err
 	}
@@ -79,36 +79,13 @@ func (c *Context) GetTextOrCaption() string {
 // ============ 聊天相关方法 ============
 
 // GetChatID 获取当前聊天 ID
-func (c *Context) GetChatID() int64 {
-	if c.Update.Message != nil {
-		return c.Update.Message.Chat.ID
-	}
-	if c.Update.EditedMessage != nil {
-		return c.Update.EditedMessage.Chat.ID
-	}
-	if c.Update.ChannelPost != nil {
-		return c.Update.ChannelPost.Chat.ID
-	}
-	if c.Update.EditedChannelPost != nil {
-		return c.Update.EditedChannelPost.Chat.ID
-	}
-	if c.Update.CallbackQuery != nil && c.Update.CallbackQuery.Message != nil {
-		return c.Update.CallbackQuery.Message.Chat.ID
-	}
-	if c.Update.MyChatMember != nil {
-		return c.Update.MyChatMember.Chat.ID
-	}
-	if c.Update.ChatMember != nil {
-		return c.Update.ChatMember.Chat.ID
-	}
-	if c.Update.ChatJoinRequest != nil {
-		return c.Update.ChatJoinRequest.Chat.ID
-	}
-	return 0
+func (c *Context) GetChatID() telego.ChatID {
+	chat := c.GetChat()
+	return chat.ChatID()
 }
 
 // GetChat 获取聊天对象
-func (c *Context) GetChat() *tgbotapi.Chat {
+func (c *Context) GetChat() (chat telego.Chat) {
 	if c.Update.Message != nil {
 		return c.Update.Message.Chat
 	}
@@ -122,58 +99,45 @@ func (c *Context) GetChat() *tgbotapi.Chat {
 		return c.Update.EditedChannelPost.Chat
 	}
 	if c.Update.CallbackQuery != nil && c.Update.CallbackQuery.Message != nil {
-		return c.Update.CallbackQuery.Message.Chat
+		return c.Update.CallbackQuery.Message.GetChat()
 	}
 	if c.Update.MyChatMember != nil {
-		return &c.Update.MyChatMember.Chat
+		return c.Update.MyChatMember.Chat
 	}
 	if c.Update.ChatMember != nil {
-		return &c.Update.ChatMember.Chat
+		return c.Update.ChatMember.Chat
 	}
 	if c.Update.ChatJoinRequest != nil {
-		return &c.Update.ChatJoinRequest.Chat
+		return c.Update.ChatJoinRequest.Chat
 	}
-	return nil
+	return telego.Chat{
+		ID:        0,
+		Type:      "unknown",
+		Title:     "unknown",
+		Username:  "unknown",
+		FirstName: "unknown",
+		LastName:  "unknown",
+	}
 }
 
 // GetChatTitle 获取当前聊天标题
 func (c *Context) GetChatTitle() string {
 	chat := c.GetChat()
-	if chat != nil {
-		return chat.Title
-	}
-	return ""
+	return chat.Title
+
 }
 
 // GetChatType 获取聊天类型 (private, group, supergroup, channel)
 func (c *Context) GetChatType() string {
 	chat := c.GetChat()
-	if chat != nil {
-		return chat.Type
-	}
-	return ""
-}
+	return chat.Type
 
-// IsPrivateChat 是否为私聊
-func (c *Context) IsPrivateChat() bool {
-	return c.GetChatType() == "private"
-}
-
-// IsGroupChat 是否为群组聊天
-func (c *Context) IsGroupChat() bool {
-	chatType := c.GetChatType()
-	return chatType == "group" || chatType == "supergroup"
-}
-
-// IsChannelPost 是否为频道消息
-func (c *Context) IsChannelPost() bool {
-	return c.Update.ChannelPost != nil || c.Update.EditedChannelPost != nil
 }
 
 // ============ 用户相关方法 ============
 
 // GetUser 获取用户对象
-func (c *Context) GetUser() *tgbotapi.User {
+func (c *Context) GetUser() *telego.User {
 	if c.Update.Message != nil && c.Update.Message.From != nil {
 		return c.Update.Message.From
 	}
@@ -181,19 +145,19 @@ func (c *Context) GetUser() *tgbotapi.User {
 		return c.Update.EditedMessage.From
 	}
 	if c.Update.CallbackQuery != nil {
-		return c.Update.CallbackQuery.From
+		return &c.Update.CallbackQuery.From
 	}
 	if c.Update.InlineQuery != nil {
-		return c.Update.InlineQuery.From
+		return &c.Update.InlineQuery.From
 	}
 	if c.Update.ChosenInlineResult != nil {
-		return c.Update.ChosenInlineResult.From
+		return &c.Update.ChosenInlineResult.From
 	}
 	if c.Update.ShippingQuery != nil {
-		return c.Update.ShippingQuery.From
+		return &c.Update.ShippingQuery.From
 	}
 	if c.Update.PreCheckoutQuery != nil {
-		return c.Update.PreCheckoutQuery.From
+		return &c.Update.PreCheckoutQuery.From
 	}
 	if c.Update.MyChatMember != nil {
 		return &c.Update.MyChatMember.From
@@ -220,7 +184,7 @@ func (c *Context) GetUserID() int64 {
 func (c *Context) GetUsername() string {
 	user := c.GetUser()
 	if user != nil {
-		return user.UserName
+		return user.Username
 	}
 	return ""
 }
@@ -256,20 +220,6 @@ func (c *Context) GetFullName() string {
 	return ""
 }
 
-// GetNickName 获取用户昵称，优先级：FirstName > UserName
-func (c *Context) GetNickName() string {
-	user := c.GetUser()
-	if user != nil {
-		if user.FirstName != "" {
-			return user.FirstName
-		}
-		if user.UserName != "" {
-			return user.UserName
-		}
-	}
-	return ""
-}
-
 // GetLanguageCode 获取用户语言代码
 func (c *Context) GetLanguageCode() string {
 	user := c.GetUser()
@@ -279,50 +229,58 @@ func (c *Context) GetLanguageCode() string {
 	return ""
 }
 
-// IsBot 判断用户是否为机器人
-func (c *Context) IsBot() bool {
-	user := c.GetUser()
-	if user != nil {
-		return user.IsBot
-	}
-	return false
-}
-
 // ============ 命令相关方法 ============
 
 // GetCommand 获取命令（不包含 /）
 func (c *Context) GetCommand() string {
-	if c.Update.Message != nil && c.Update.Message.IsCommand() {
-		return c.Update.Message.Command()
+	msg := c.GetMessage()
+	if msg == nil || !c.IsCommand() {
+		return ""
 	}
+
+	for _, entity := range msg.Entities {
+		if entity.Type == "bot_command" && entity.Offset == 0 {
+			// 命令文本在 msg.Text 里，从 Offset 开始，长度为 entity.Length
+			cmd := msg.Text[entity.Offset : entity.Offset+entity.Length]
+			// 去掉前面的 "/"
+			if len(cmd) > 0 && cmd[0] == '/' {
+				// 还要去掉 bot username（/start@mybot）
+				for i, ch := range cmd {
+					if ch == '@' {
+						return cmd[1:i] // 去掉 '/' 和 '@...'
+					}
+				}
+				return cmd[1:] // 直接去掉 '/'
+			}
+		}
+	}
+
 	return ""
 }
 
 // GetCommandArgs 获取命令参数
 func (c *Context) GetCommandArgs() string {
-	if c.Update.Message != nil && c.Update.Message.IsCommand() {
-		return c.Update.Message.CommandArguments()
+	msg := c.GetMessage()
+	if msg == nil || !c.IsCommand() {
+		return ""
 	}
-	return ""
-}
 
-// GetCommandWithArgs 获取完整命令（包含参数）
-func (c *Context) GetCommandWithArgs() string {
-	if c.Update.Message != nil && c.Update.Message.IsCommand() {
-		cmd := c.Update.Message.Command()
-		args := c.Update.Message.CommandArguments()
-		if args != "" {
-			return cmd + " " + args
+	for _, entity := range msg.Entities {
+		if entity.Type == "bot_command" && entity.Offset == 0 {
+			if len(msg.Text) > entity.Length {
+				return strings.TrimSpace(msg.Text[entity.Length:])
+			}
+			break
 		}
-		return cmd
 	}
+
 	return ""
 }
 
 // ============ 回调查询方法 ============
 
 // GetCallbackQuery 获取回调查询
-func (c *Context) GetCallbackQuery() *tgbotapi.CallbackQuery {
+func (c *Context) GetCallbackQuery() *telego.CallbackQuery {
 	return c.Update.CallbackQuery
 }
 
@@ -345,7 +303,7 @@ func (c *Context) GetCallbackQueryID() string {
 // ============ 内联查询方法 ============
 
 // 获取内联查询
-func (c *Context) GetInlineQuery() *tgbotapi.InlineQuery {
+func (c *Context) GetInlineQuery() *telego.InlineQuery {
 	return c.Update.InlineQuery
 }
 
@@ -366,14 +324,14 @@ func (c *Context) GetInlineQueryID() string {
 }
 
 // GetChosenInlineResult 获取选中的内联结果
-func (c *Context) GetChosenInlineResult() *tgbotapi.ChosenInlineResult {
+func (c *Context) GetChosenInlineResult() *telego.ChosenInlineResult {
 	return c.Update.ChosenInlineResult
 }
 
 // ============ 媒体相关方法 ============
 
 // collectMedias 内部工具函数：收集单条消息的媒体（取最高质量）
-func collectMedias(msg *tgbotapi.Message) (photos []string, videos []string, animations []string, documents []string, audios []string, voices []string, videoNotes []string) {
+func collectMedias(msg *telego.Message) (photos []string, videos []string, animations []string, documents []string, audios []string, voices []string, videoNotes []string) {
 	if msg == nil {
 		return
 	}
@@ -427,7 +385,7 @@ func collectMedias(msg *tgbotapi.Message) (photos []string, videos []string, ani
 func (c *Context) GetMedias() ([]string, bool) {
 	var medias []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		p, v, a, d, au, vo, vn := collectMedias(msg)
 		medias = append(medias, p...)
 		medias = append(medias, v...)
@@ -453,7 +411,7 @@ func (c *Context) GetMedias() ([]string, bool) {
 func (c *Context) GetPhotos() ([]string, bool) {
 	var photos []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		p, _, _, _, _, _, _ := collectMedias(msg)
 		photos = append(photos, p...)
 	}
@@ -482,7 +440,7 @@ func (c *Context) GetPhoto() (string, bool) {
 func (c *Context) GetVideos() ([]string, bool) {
 	var videos []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, v, _, _, _, _, _ := collectMedias(msg)
 		videos = append(videos, v...)
 	}
@@ -511,7 +469,7 @@ func (c *Context) GetVideo() (string, bool) {
 func (c *Context) GetAnimations() ([]string, bool) {
 	var animations []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, _, a, _, _, _, _ := collectMedias(msg)
 		animations = append(animations, a...)
 	}
@@ -540,7 +498,7 @@ func (c *Context) GetAnimation() (string, bool) {
 func (c *Context) GetDocuments() ([]string, bool) {
 	var documents []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, _, _, d, _, _, _ := collectMedias(msg)
 		documents = append(documents, d...)
 	}
@@ -569,7 +527,7 @@ func (c *Context) GetDocument() (string, bool) {
 func (c *Context) GetAudios() ([]string, bool) {
 	var audios []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, _, _, _, au, _, _ := collectMedias(msg)
 		audios = append(audios, au...)
 	}
@@ -598,7 +556,7 @@ func (c *Context) GetAudio() (string, bool) {
 func (c *Context) GetVoices() ([]string, bool) {
 	var voices []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, _, _, _, _, vo, _ := collectMedias(msg)
 		voices = append(voices, vo...)
 	}
@@ -627,7 +585,7 @@ func (c *Context) GetVoice() (string, bool) {
 func (c *Context) GetVideoNotes() ([]string, bool) {
 	var videoNotes []string
 
-	process := func(msg *tgbotapi.Message) {
+	process := func(msg *telego.Message) {
 		_, _, _, _, _, _, vn := collectMedias(msg)
 		videoNotes = append(videoNotes, vn...)
 	}
@@ -653,7 +611,7 @@ func (c *Context) GetVideoNote() (string, bool) {
 }
 
 // GetSticker 获取贴纸
-func (c *Context) GetSticker() *tgbotapi.Sticker {
+func (c *Context) GetSticker() *telego.Sticker {
 	if c.Update.Message != nil && c.Update.Message.Sticker != nil {
 		return c.Update.Message.Sticker
 	}
@@ -674,16 +632,11 @@ func (c *Context) HasMedia() bool {
 // ============ 回复消息方法 ============
 
 // GetReplyToMessage 获取被回复的消息
-func (c *Context) GetReplyToMessage() *tgbotapi.Message {
+func (c *Context) GetReplyToMessage() *telego.Message {
 	if c.Update.Message != nil {
 		return c.Update.Message.ReplyToMessage
 	}
 	return nil
-}
-
-// IsReply 是否为回复消息
-func (c *Context) IsReply() bool {
-	return c.GetReplyToMessage() != nil
 }
 
 // GetReplyToMessageID 获取被回复消息的 ID
@@ -698,7 +651,7 @@ func (c *Context) GetReplyToMessageID() int {
 // ============ 位置和联系人方法 ============
 
 // GetLocation 获取位置信息
-func (c *Context) GetLocation() *tgbotapi.Location {
+func (c *Context) GetLocation() *telego.Location {
 	if c.Update.Message != nil && c.Update.Message.Location != nil {
 		return c.Update.Message.Location
 	}
@@ -709,7 +662,7 @@ func (c *Context) GetLocation() *tgbotapi.Location {
 }
 
 // GetContact 获取联系人信息
-func (c *Context) GetContact() *tgbotapi.Contact {
+func (c *Context) GetContact() *telego.Contact {
 	if c.Update.Message != nil && c.Update.Message.Contact != nil {
 		return c.Update.Message.Contact
 	}
@@ -717,7 +670,7 @@ func (c *Context) GetContact() *tgbotapi.Contact {
 }
 
 // GetVenue 获取地点信息
-func (c *Context) GetVenue() *tgbotapi.Venue {
+func (c *Context) GetVenue() *telego.Venue {
 	if c.Update.Message != nil && c.Update.Message.Venue != nil {
 		return c.Update.Message.Venue
 	}
@@ -725,7 +678,7 @@ func (c *Context) GetVenue() *tgbotapi.Venue {
 }
 
 // GetPoll 获取投票信息
-func (c *Context) GetPoll() *tgbotapi.Poll {
+func (c *Context) GetPoll() *telego.Poll {
 	if c.Update.Message != nil && c.Update.Message.Poll != nil {
 		return c.Update.Message.Poll
 	}
@@ -736,12 +689,12 @@ func (c *Context) GetPoll() *tgbotapi.Poll {
 }
 
 // GetPollAnswer 获取投票答案
-func (c *Context) GetPollAnswer() *tgbotapi.PollAnswer {
+func (c *Context) GetPollAnswer() *telego.PollAnswer {
 	return c.Update.PollAnswer
 }
 
 // GetDice 获取骰子信息
-func (c *Context) GetDice() *tgbotapi.Dice {
+func (c *Context) GetDice() *telego.Dice {
 	if c.Update.Message != nil && c.Update.Message.Dice != nil {
 		return c.Update.Message.Dice
 	}
@@ -751,7 +704,7 @@ func (c *Context) GetDice() *tgbotapi.Dice {
 // ============ 群组管理方法 ============
 
 // GetNewChatMembers 获取新加入的成员
-func (c *Context) GetNewChatMembers() []tgbotapi.User {
+func (c *Context) GetNewChatMembers() []telego.User {
 	if c.Update.Message != nil && c.Update.Message.NewChatMembers != nil {
 		return c.Update.Message.NewChatMembers
 	}
@@ -759,7 +712,7 @@ func (c *Context) GetNewChatMembers() []tgbotapi.User {
 }
 
 // GetLeftChatMember 获取离开的成员
-func (c *Context) GetLeftChatMember() *tgbotapi.User {
+func (c *Context) GetLeftChatMember() *telego.User {
 	if c.Update.Message != nil && c.Update.Message.LeftChatMember != nil {
 		return c.Update.Message.LeftChatMember
 	}
@@ -775,58 +728,50 @@ func (c *Context) GetNewChatTitle() string {
 }
 
 // GetNewChatPhoto 获取新的群组头像
-func (c *Context) GetNewChatPhoto() []tgbotapi.PhotoSize {
+func (c *Context) GetNewChatPhoto() []telego.PhotoSize {
 	if c.Update.Message != nil && c.Update.Message.NewChatPhoto != nil {
 		return c.Update.Message.NewChatPhoto
 	}
 	return nil
 }
 
-// IsPinnedMessage 是否为置顶消息通知
-func (c *Context) IsPinnedMessage() bool {
-	if c.Update.Message != nil {
-		return c.Update.Message.PinnedMessage != nil
-	}
-	return false
-}
-
 // GetPinnedMessage 获取置顶的消息
-func (c *Context) GetPinnedMessage() *tgbotapi.Message {
+func (c *Context) GetPinnedMessage() *telego.Message {
 	if c.Update.Message != nil {
-		return c.Update.Message.PinnedMessage
+		return c.Update.Message.PinnedMessage.Message()
 	}
 	return nil
 }
 
 // GetMyChatMember 获取机器人自身的成员状态变化
-func (c *Context) GetMyChatMember() *tgbotapi.ChatMemberUpdated {
+func (c *Context) GetMyChatMember() *telego.ChatMemberUpdated {
 	return c.Update.MyChatMember
 }
 
 // GetChatMember 获取群成员状态变化
-func (c *Context) GetChatMember() *tgbotapi.ChatMemberUpdated {
+func (c *Context) GetChatMember() *telego.ChatMemberUpdated {
 	return c.Update.ChatMember
 }
 
 // GetChatJoinRequest 获取加群请求
-func (c *Context) GetChatJoinRequest() *tgbotapi.ChatJoinRequest {
+func (c *Context) GetChatJoinRequest() *telego.ChatJoinRequest {
 	return c.Update.ChatJoinRequest
 }
 
 // ============ 支付相关方法 ============
 
 // GetShippingQuery 获取配送查询
-func (c *Context) GetShippingQuery() *tgbotapi.ShippingQuery {
+func (c *Context) GetShippingQuery() *telego.ShippingQuery {
 	return c.Update.ShippingQuery
 }
 
 // GetPreCheckoutQuery 获取预结账查询
-func (c *Context) GetPreCheckoutQuery() *tgbotapi.PreCheckoutQuery {
+func (c *Context) GetPreCheckoutQuery() *telego.PreCheckoutQuery {
 	return c.Update.PreCheckoutQuery
 }
 
 // GetSuccessfulPayment 获取成功支付信息
-func (c *Context) GetSuccessfulPayment() *tgbotapi.SuccessfulPayment {
+func (c *Context) GetSuccessfulPayment() *telego.SuccessfulPayment {
 	if c.Update.Message != nil && c.Update.Message.SuccessfulPayment != nil {
 		return c.Update.Message.SuccessfulPayment
 	}
@@ -835,58 +780,8 @@ func (c *Context) GetSuccessfulPayment() *tgbotapi.SuccessfulPayment {
 
 // ============ 其他实用方法 ============
 
-// GetForwardFrom 获取转发来源用户
-func (c *Context) GetForwardFrom() *tgbotapi.User {
-	msg := c.GetMessage()
-	if msg != nil && msg.ForwardFrom != nil {
-		return msg.ForwardFrom
-	}
-	return nil
-}
-
-// GetForwardFromChat 获取转发来源聊天
-func (c *Context) GetForwardFromChat() *tgbotapi.Chat {
-	msg := c.GetMessage()
-	if msg != nil && msg.ForwardFromChat != nil {
-		return msg.ForwardFromChat
-	}
-	return nil
-}
-
-// IsForwarded 是否为转发消息
-func (c *Context) IsForwarded() bool {
-	msg := c.GetMessage()
-	if msg != nil {
-		return msg.ForwardFrom != nil || msg.ForwardFromChat != nil
-	}
-	return false
-}
-
-// GetDate 获取消息时间戳
-func (c *Context) GetDate() int {
-	msg := c.GetMessage()
-	if msg != nil {
-		return msg.Date
-	}
-	return 0
-}
-
-// GetEditDate 获取消息编辑时间戳
-func (c *Context) GetEditDate() int {
-	msg := c.GetMessage()
-	if msg != nil {
-		return msg.EditDate
-	}
-	return 0
-}
-
-// IsEdited 是否为编辑后的消息
-func (c *Context) IsEdited() bool {
-	return c.Update.EditedMessage != nil || c.Update.EditedChannelPost != nil
-}
-
 // GetEntities 获取消息实体（如 @username, #hashtag, /command 等）
-func (c *Context) GetEntities() []tgbotapi.MessageEntity {
+func (c *Context) GetEntities() []telego.MessageEntity {
 	msg := c.GetMessage()
 	if msg != nil {
 		return msg.Entities
@@ -895,7 +790,7 @@ func (c *Context) GetEntities() []tgbotapi.MessageEntity {
 }
 
 // GetCaptionEntities 获取媒体说明文本的实体
-func (c *Context) GetCaptionEntities() []tgbotapi.MessageEntity {
+func (c *Context) GetCaptionEntities() []telego.MessageEntity {
 	msg := c.GetMessage()
 	if msg != nil {
 		return msg.CaptionEntities

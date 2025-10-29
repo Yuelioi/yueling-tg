@@ -4,14 +4,14 @@ import (
 	ctx "context"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
-// Context 封装了处理 Telegram 消息所需的上下文信息
+// 封装了处理 Telegram 消息所需的上下文信息
 type Context struct {
 	Ctx     ctx.Context
-	Api     *tgbotapi.BotAPI
-	Update  tgbotapi.Update
+	Api     *telego.Bot
+	Update  telego.Update
 	Storage *Storage
 
 	// 元数据
@@ -19,8 +19,8 @@ type Context struct {
 	HandlerName string
 }
 
-// NewContext 创建新的上下文实例
-func NewContext(c ctx.Context, api *tgbotapi.BotAPI, update tgbotapi.Update) *Context {
+// 创建新的上下文实例
+func NewContext(c ctx.Context, api *telego.Bot, update telego.Update) *Context {
 	return &Context{
 		Ctx:       c,
 		Api:       api,

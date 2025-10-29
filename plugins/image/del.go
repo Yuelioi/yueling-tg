@@ -23,7 +23,7 @@ func (rg *RandomGenerator) handleDeleteImage(c *context.Context, cmdCtx params.C
 
 	// 获取最大尺寸的图片
 	photo := replyMsg.Photo[len(replyMsg.Photo)-1]
-	url, err := c.Api.GetFileDirectURL(photo.FileID)
+	url, err := c.GetFileDirectURL(photo.FileID)
 	if err != nil {
 		rg.Log.Error().Err(err).Msg("获取文件链接失败")
 		c.Reply("获取图片失败 😭")

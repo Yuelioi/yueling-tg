@@ -13,7 +13,7 @@ import (
 	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/plugin"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
 var _ plugin.Plugin = (*MusicPlugin)(nil)
@@ -146,7 +146,7 @@ func (mp *MusicPlugin) handleSearch(c *context.Context) {
 	// 缓存搜索结果
 	chatID := c.GetChatID()
 	mp.cacheMutex.Lock()
-	mp.searchCache[chatID] = &SearchCache{
+	mp.searchCache[chatID.ID] = &SearchCache{
 		Results: results,
 		Keyword: keyword,
 		Source:  "netease",
@@ -172,7 +172,7 @@ func (mp *MusicPlugin) handleSourceChange(cmd string, c *context.Context) error 
 	// 从缓存获取关键词
 	chatID := c.GetChatID()
 	mp.cacheMutex.RLock()
-	cache, exists := mp.searchCache[chatID]
+	cache, exists := mp.searchCache[chatID.ID]
 	mp.cacheMutex.RUnlock()
 
 	if !exists {
@@ -196,7 +196,7 @@ func (mp *MusicPlugin) handleSourceChange(cmd string, c *context.Context) error 
 
 	// 更新缓存
 	mp.cacheMutex.Lock()
-	mp.searchCache[chatID] = &SearchCache{
+	mp.searchCache[chatID.ID] = &SearchCache{
 		Results: results,
 		Keyword: keyword,
 		Source:  source,
@@ -204,7 +204,7 @@ func (mp *MusicPlugin) handleSourceChange(cmd string, c *context.Context) error 
 	}
 	mp.cacheMutex.Unlock()
 
-	msg := c.GetCallbackQuery().Message
+	msg := c.GetCallbackQuery().Message.Message()
 	if msg == nil {
 		return nil
 	}
@@ -214,6 +214,8 @@ func (mp *MusicPlugin) handleSourceChange(cmd string, c *context.Context) error 
 	c.AnswerCallback("已切换音乐源")
 	return nil
 }
+
+// -------------------- 播放处理 --------------------
 
 // -------------------- 播放处理 --------------------
 
@@ -231,7 +233,7 @@ func (mp *MusicPlugin) handlePlay(cmd string, c *context.Context) error {
 	// 从缓存获取搜索结果
 	chatID := c.GetChatID()
 	mp.cacheMutex.RLock()
-	cache, exists := mp.searchCache[chatID]
+	cache, exists := mp.searchCache[chatID.ID]
 	mp.cacheMutex.RUnlock()
 
 	if !exists || index < 0 || index >= len(cache.Results) {
@@ -260,22 +262,37 @@ func (mp *MusicPlugin) handlePlay(cmd string, c *context.Context) error {
 	}
 
 	// 发送音频消息
-	audio := tgbotapi.NewAudio(msg.Chat.ID, tgbotapi.FileURL(urlResult.URL))
-	audio.Title = songName
-	audio.Performer = artist
-	audio.ReplyToMessageID = msg.MessageID
+	params := &telego.SendAudioParams{
+		ChatID:    c.GetChatID(),
+		Audio:     telego.InputFile{FileID: urlResult.URL}, // 如果是URL，使用FileID字段
+		Title:     songName,
+		Performer: artist,
+		ReplyParameters: &telego.ReplyParameters{
+			MessageID: msg.GetMessageID(),
+		},
+	}
 
-	_, err = c.Api.Send(audio)
+	// 如果urlResult.URL是HTTP URL，需要用不同方式
+	if strings.HasPrefix(urlResult.URL, "http") {
+		params.Audio = telego.InputFile{URL: urlResult.URL}
+	}
+
+	_, err = c.Api.SendAudio(c.Ctx, params)
 	if err != nil {
 		// 如果发送音频失败，发送链接
 		sizeStr := fmt.Sprintf("%.2f MB", float64(urlResult.Size)/1024)
 		linkMsg := fmt.Sprintf("🎵 %s - %s\n\n🔗 播放链接：\n%s\n\n音质：%dkbps | 大小：%s",
 			songName, artist, urlResult.URL, urlResult.BR, sizeStr)
 
-		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, linkMsg)
-		replyMsg.ReplyToMessageID = msg.MessageID
-		c.Api.Send(replyMsg)
+		replyParams := &telego.SendMessageParams{
+			ChatID: c.GetChatID(),
+			Text:   linkMsg,
+			ReplyParameters: &telego.ReplyParameters{
+				MessageID: msg.GetMessageID(),
+			},
+		}
 
+		c.Api.SendMessage(c.Ctx, replyParams)
 		c.AnswerCallback("已发送播放链接")
 	} else {
 		c.AnswerCallback("正在播放 🎶")
@@ -287,7 +304,7 @@ func (mp *MusicPlugin) handlePlay(cmd string, c *context.Context) error {
 // -------------------- 显示搜索结果 --------------------
 
 func (mp *MusicPlugin) showSearchResults(c *context.Context, results []SearchResult, keyword, source string) {
-	var buttons [][]tgbotapi.InlineKeyboardButton
+	var buttons [][]telego.InlineKeyboardButton
 
 	// 添加歌曲按钮
 	for i, song := range results {
@@ -300,13 +317,16 @@ func (mp *MusicPlugin) showSearchResults(c *context.Context, results []SearchRes
 		// 使用索引而不是ID
 		callbackData := fmt.Sprintf("%s:play:%d", mp.PluginInfo().ID, i)
 
-		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData),
-		))
+		buttons = append(buttons, []telego.InlineKeyboardButton{
+			{
+				Text:         buttonText,
+				CallbackData: callbackData,
+			},
+		})
 	}
 
 	// 添加音乐源切换按钮
-	var sourceButtons []tgbotapi.InlineKeyboardButton
+	var sourceButtons []telego.InlineKeyboardButton
 	for _, src := range musicSources {
 		emoji := ""
 		if src.ID == source {
@@ -314,30 +334,33 @@ func (mp *MusicPlugin) showSearchResults(c *context.Context, results []SearchRes
 		}
 		callbackData := fmt.Sprintf("%s:source:%s", mp.PluginInfo().ID, src.ID)
 
-		sourceButtons = append(sourceButtons,
-			tgbotapi.NewInlineKeyboardButtonData(emoji+src.Name, callbackData))
+		sourceButtons = append(sourceButtons, telego.InlineKeyboardButton{
+			Text:         emoji + src.Name,
+			CallbackData: callbackData,
+		})
 
 		// 每行3个按钮
 		if len(sourceButtons) == 3 {
 			buttons = append(buttons, sourceButtons)
-			sourceButtons = []tgbotapi.InlineKeyboardButton{}
+			sourceButtons = []telego.InlineKeyboardButton{}
 		}
 	}
 	if len(sourceButtons) > 0 {
 		buttons = append(buttons, sourceButtons)
 	}
 
-	markup := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	markup := telego.InlineKeyboardMarkup{
+		InlineKeyboard: buttons,
+	}
 
 	msgText := fmt.Sprintf("🔍 搜索结果：%s\n📱 请选择要播放的歌曲：", keyword)
 	c.SendMessageWithMarkup(msgText, markup)
-
 }
 
 // -------------------- 更新搜索结果 --------------------
 
-func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *tgbotapi.Message, results []SearchResult, keyword, source string) {
-	var buttons [][]tgbotapi.InlineKeyboardButton
+func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *telego.Message, results []SearchResult, keyword, source string) {
+	var buttons [][]telego.InlineKeyboardButton
 
 	// 添加歌曲按钮
 	for i, song := range results {
@@ -350,13 +373,16 @@ func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *tgbotapi.Mes
 		// 使用索引而不是ID
 		callbackData := fmt.Sprintf("%s:play:%d", mp.PluginInfo().ID, i)
 
-		buttons = append(buttons, tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData(buttonText, callbackData),
-		))
+		buttons = append(buttons, []telego.InlineKeyboardButton{
+			{
+				Text:         buttonText,
+				CallbackData: callbackData,
+			},
+		})
 	}
 
 	// 添加音乐源切换按钮
-	var sourceButtons []tgbotapi.InlineKeyboardButton
+	var sourceButtons []telego.InlineKeyboardButton
 	for _, src := range musicSources {
 		emoji := ""
 		if src.ID == source {
@@ -364,19 +390,23 @@ func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *tgbotapi.Mes
 		}
 		callbackData := fmt.Sprintf("%s:source:%s", mp.PluginInfo().ID, src.ID)
 
-		sourceButtons = append(sourceButtons,
-			tgbotapi.NewInlineKeyboardButtonData(emoji+src.Name, callbackData))
+		sourceButtons = append(sourceButtons, telego.InlineKeyboardButton{
+			Text:         emoji + src.Name,
+			CallbackData: callbackData,
+		})
 
 		if len(sourceButtons) == 3 {
 			buttons = append(buttons, sourceButtons)
-			sourceButtons = []tgbotapi.InlineKeyboardButton{}
+			sourceButtons = []telego.InlineKeyboardButton{}
 		}
 	}
 	if len(sourceButtons) > 0 {
 		buttons = append(buttons, sourceButtons)
 	}
 
-	markup := tgbotapi.NewInlineKeyboardMarkup(buttons...)
+	markup := telego.InlineKeyboardMarkup{
+		InlineKeyboard: buttons,
+	}
 
 	sourceName := ""
 	for _, src := range musicSources {
@@ -388,16 +418,14 @@ func (mp *MusicPlugin) updateSearchResults(c *context.Context, msg *tgbotapi.Mes
 
 	msgText := fmt.Sprintf("🔍 搜索结果：%s\n📱 当前音乐源：%s\n\n请选择要播放的歌曲：", keyword, sourceName)
 
-	edit := tgbotapi.EditMessageTextConfig{
-		BaseEdit: tgbotapi.BaseEdit{
-			ChatID:      msg.Chat.ID,
-			MessageID:   msg.MessageID,
-			ReplyMarkup: &markup,
-		},
-		Text: msgText,
+	params := &telego.EditMessageTextParams{
+		ChatID:      c.GetChatID(),
+		MessageID:   msg.GetMessageID(),
+		Text:        msgText,
+		ReplyMarkup: &markup,
 	}
 
-	c.Api.Send(edit)
+	c.Api.EditMessageText(c.Ctx, params)
 }
 
 // -------------------- API调用 --------------------

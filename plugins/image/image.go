@@ -12,7 +12,7 @@ import (
 	"yueling_tg/internal/message"
 	"yueling_tg/pkg/plugin"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
 // 确保结构体实现接口
@@ -149,34 +149,39 @@ func (rg *RandomGenerator) another(cmd string, c *context.Context) error {
 		return nil
 	}
 
-	newPhoto := tgbotapi.NewInputMediaPhoto(tgbotapi.FilePath(imgPaths[0]))
-
 	// 重新创建按钮
 	buttons := rg.createButton(folder)
 
-	edit := tgbotapi.EditMessageMediaConfig{
-		BaseEdit: tgbotapi.BaseEdit{
-			ChatID:      msg.Chat.ID,
-			MessageID:   msg.MessageID,
-			ReplyMarkup: &buttons,
-		},
-		Media: newPhoto,
+	params := &telego.EditMessageMediaParams{
+		ChatID:      c.GetChatID(),
+		MessageID:   msg.GetMessageID(),
+		Media:       message.NewResource(imgPaths[0]).ToInputMedia(),
+		ReplyMarkup: &buttons,
 	}
 
-	c.Api.Send(edit)
+	_, err = c.Api.EditMessageMedia(c.Ctx, params)
+	if err != nil {
+		rg.Log.Error().Err(err).Msg("编辑消息失败")
+		c.AnswerCallback("换图失败 😢")
+		return err
+	}
+
 	c.AnswerCallback("已换一张 🔄")
 
 	return nil
 }
 
-func (rg *RandomGenerator) createButton(folder string) tgbotapi.InlineKeyboardMarkup {
-	buttons := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("换一张 🔄", rg.PluginInfo().ID+"_"+folder),
-		),
-	)
-
-	return buttons
+func (rg *RandomGenerator) createButton(folder string) telego.InlineKeyboardMarkup {
+	return telego.InlineKeyboardMarkup{
+		InlineKeyboard: [][]telego.InlineKeyboardButton{
+			{
+				telego.InlineKeyboardButton{
+					Text:         "换一张 🔄",
+					CallbackData: rg.PluginInfo().ID + "_" + folder,
+				},
+			},
+		},
+	}
 }
 
 // -------------------- 逻辑核心 --------------------

@@ -6,11 +6,7 @@ import (
 
 func IsCommandEvent() RuleFunc {
 	return func(ctx *context.Context) bool {
-		msg := ctx.GetMessage()
-		if msg != nil {
-			return msg.IsCommand()
-		}
-		return false
+		return ctx.IsCommand()
 	}
 }
 

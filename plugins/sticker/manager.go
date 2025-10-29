@@ -5,16 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sync"
+	"strings"
 
 	"yueling_tg/internal/core/context"
-	"yueling_tg/pkg/plugin"
+	"yueling_tg/internal/message"
 	"yueling_tg/pkg/plugin/params"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
-
-var _ plugin.Plugin = (*BotStickerPlugin)(nil)
 
 // -------------------- 数据结构 --------------------
 
@@ -25,97 +23,92 @@ type StickerSetData struct {
 
 type StickerSetDB struct {
 	Sets []*StickerSetData `json:"sets"`
-	mu   sync.RWMutex      `json:"-"`
-}
-
-// -------------------- 插件结构 --------------------
-
-type BotStickerPlugin struct {
-	*plugin.Base
 }
 
 // -------------------- 命令处理 --------------------
 
 func (sp *StickerPlugin) handleCreateSet(c *context.Context, cmdCtx params.CommandContext) {
 	if cmdCtx.Args.Len() < 2 {
-		c.Reply("❌ 用法：创建贴纸集 <显示名称> <短名称> ")
+		c.Reply("❌ 用法：创建贴纸集 <显示名称> <短名称>")
 		return
 	}
 	title := cmdCtx.Args.Get(0)
 	shortName := cmdCtx.Args.Get(1) // 用户指定的短名称
 
-	bot, err := c.Api.GetMe()
+	bot, err := c.GetBot()
 	if err != nil {
-		c.Reply("❌ 获取BotID失败")
+		c.Replyf("❌ 获取机器人信息失败: %v", err)
 		return
 	}
 
-	setName := fmt.Sprintf("pack_%s_by_%s", shortName, bot.UserName)
+	setName := fmt.Sprintf("pack_%s_by_%s", shortName, bot.Username)
 
 	// 检查是否已存在
-	sp.db.mu.Lock()
-	_, err = c.Api.GetStickerSet(tgbotapi.GetStickerSetConfig{
+
+	checkParams := &telego.GetStickerSetParams{
 		Name: setName,
-	})
-	if err == nil {
-		c.Replyf("贴纸集 '%s' 已经存在了", setName)
 	}
-	// 如果错误不是因为贴纸集不存在，则返回错误
-	if tgErr, ok := err.(tgbotapi.Error); ok && tgErr.Code != 400 {
-		c.Replyf("贴纸集检查失败: %v", err)
+	_, err = c.Api.GetStickerSet(c.Ctx, checkParams)
+	if err == nil {
+		c.Replyf("❌ 贴纸集 '%s' 已经存在了", setName)
+		return
 	}
 
 	photo, ok := c.GetPhoto()
 	if !ok {
-		c.Reply("请发送一张图片")
-		return
-	}
-	// 转为合法图片
-	webpData, err := sp.downloadAndConvertToWebP(c, photo)
-	if err != nil {
-		c.Replyf("转换图片失败: %v", err)
+		c.Reply("❌ 请发送一张图片作为第一张贴纸")
 		return
 	}
 
-	sp.createStickerSet(c.Api, c.GetUserID(), setName, title, webpData)
+	// 转为合法图片
+	webpData, err := sp.downloadAndConvertToWebP(c, photo)
+	if err != nil {
+		c.Replyf("❌ 转换图片失败: %v", err)
+		return
+	}
+
+	// 创建贴纸集
+	ok, err = sp.createStickerSet(c, c.GetUserID(), setName, title, webpData)
+	if err != nil || !ok {
+		c.Replyf("❌ 创建贴纸集失败: %v", err)
+		return
+	}
 
 	// 保存记录到 db
 	sp.db.Sets = append(sp.db.Sets, &StickerSetData{
 		Name:  setName,
 		Title: title,
 	})
-	sp.db.mu.Unlock()
 	sp.saveData()
 
-	c.Replyf("✅ 将创建贴纸集：%s (%s)，请发送第一张贴纸以完成创建", title, setName)
+	c.Replyf("✅ 成功创建贴纸集：%s\n\n🔗 链接：https://t.me/addstickers/%s", title, setName)
 }
 
-func (sp *StickerPlugin) createStickerSet(bot *tgbotapi.BotAPI, userID int64, setName, setTitle string, webpData []byte) (bool, error) {
-
-	// 准备贴纸文件
-	fileBytes := tgbotapi.FileBytes{
-		Name:  "sticker.webp",
-		Bytes: webpData,
+func (sp *StickerPlugin) createStickerSet(c *context.Context, userID int64, setName, setTitle string, webpData []byte) (bool, error) {
+	// 创建 InputSticker
+	inputSticker := telego.InputSticker{
+		Sticker: telego.InputFile{
+			File: message.NewNameReader("sticker.webp", webpData),
+		},
+		Format:    "static", // 静态贴纸
+		EmojiList: []string{"😀"},
 	}
 
-	stickerConfig := tgbotapi.NewStickerSetConfig{
-		UserID:     userID,
-		Name:       setName,
-		Title:      setTitle,
-		PNGSticker: fileBytes,
-		Emojis:     "😀",
+	params := &telego.CreateNewStickerSetParams{
+		UserID:      userID,
+		Name:        setName,
+		Title:       setTitle,
+		Stickers:    []telego.InputSticker{inputSticker},
+		StickerType: "regular", // 静态贴纸
 	}
 
 	// 创建贴纸集
-	resp, err := bot.Request(stickerConfig)
+	err := c.Api.CreateNewStickerSet(c.Ctx, params)
 	if err != nil {
 		return false, err
 	}
 
-	if resp.Ok {
-		return true, nil
-	}
-	return false, fmt.Errorf("创建贴纸集失败: %s", resp.Description)
+	return true, nil
 }
 
 func (sp *StickerPlugin) handleDeleteSet(ctx *context.Context, cmdCtx params.CommandContext) {
@@ -125,8 +118,6 @@ func (sp *StickerPlugin) handleDeleteSet(ctx *context.Context, cmdCtx params.Com
 	}
 
 	name := cmdCtx.Args.Get(0)
-	sp.db.mu.Lock()
-	defer sp.db.mu.Unlock()
 
 	index := -1
 	for i, s := range sp.db.Sets {
@@ -146,21 +137,21 @@ func (sp *StickerPlugin) handleDeleteSet(ctx *context.Context, cmdCtx params.Com
 	ctx.Reply("✅ 删除成功")
 }
 
-func (sp *StickerPlugin) handleListSet(ctx *context.Context, cmdCtx params.CommandContext) {
-	sp.db.mu.RLock()
-	defer sp.db.mu.RUnlock()
-
+func (sp *StickerPlugin) handleListSet(ctx *context.Context) {
 	if len(sp.db.Sets) == 0 {
 		ctx.Reply("当前没有任何贴纸集")
 		return
 	}
 
-	msg := "📝 当前Bot管理的贴纸集：\n"
-	for _, s := range sp.db.Sets {
-		msg += fmt.Sprintf("%s (%s)\n", s.Title, s.Name)
+	var sb strings.Builder
+	sb.WriteString("📝 当前 Bot 管理的贴纸集：\n\n")
+
+	for i, s := range sp.db.Sets {
+		link := fmt.Sprintf("https://t.me/addstickers/%s", s.Name)
+		sb.WriteString(fmt.Sprintf("%d. %s\n🔗 [%s](%s)\n\n", i+1, s.Title, s.Name, link))
 	}
 
-	ctx.Reply(msg)
+	ctx.ReplyMarkdown(sb.String())
 }
 
 // -------------------- 数据管理 --------------------
@@ -183,9 +174,7 @@ func (sp *StickerPlugin) saveData() error {
 		return err
 	}
 
-	sp.db.mu.RLock()
 	data, err := json.MarshalIndent(sp.db, "", "  ")
-	sp.db.mu.RUnlock()
 	if err != nil {
 		return err
 	}

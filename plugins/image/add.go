@@ -54,7 +54,7 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 	duplicates := 0
 
 	for i, fileID := range photos {
-		url, err := c.Api.GetFileDirectURL(fileID)
+		url, err := c.GetFileDirectURL(fileID)
 		if err != nil {
 			rg.Log.Error().Err(err).Msg("获取文件链接失败")
 			c.Replyf("第 %d 张图片获取失败 😭", i+1)

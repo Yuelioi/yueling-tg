@@ -95,15 +95,17 @@ func (rp *RollPlugin) rollHandler(c *context.Context, commandArgs params.Command
 		return
 	}
 
+	botName := c.GetBotFullname()
+
 	// 情况 3：字符串随机 => roll 猫 狗 鸟
 	if len(args) >= 2 {
 		choices := args
 		replyList := []string{
 			"emmm，要不试试「%s」？",
 			"来试试「%s」吧～",
-			"月灵觉得「%s」不错哟~",
+			botName + "觉得「%s」不错哟~",
 			"就决定是你了！「%s」！",
-			"月灵想要「%s」！",
+			botName + "想要「%s」！",
 		}
 		pick := choices[rand.Intn(len(choices))]
 		c.Reply(fmt.Sprintf(replyList[rand.Intn(len(replyList))], pick))

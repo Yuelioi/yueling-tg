@@ -12,6 +12,7 @@ import (
 type Component string
 
 const (
+	SystemComponent          Component = "system"
 	MiddlewareComponent      Component = "middleware"
 	ProviderComponent        Component = "provider"
 	BotComponent             Component = "bot"
@@ -32,6 +33,7 @@ func New(component Component, name string) zerolog.Logger {
 		TimeFormat: "2006-01-02 15:04:05",
 
 		FormatLevel: func(i interface{}) string {
+			// i 可以是 string 或 zerolog.Level 等，先格式化再大写
 			level := strings.ToUpper(fmt.Sprintf("%s", i))
 			color := getLevelColor(level)
 			return fmt.Sprintf("%s[%-5s]%s", color, level, "\x1b[0m")
@@ -41,9 +43,9 @@ func New(component Component, name string) zerolog.Logger {
 			if i == nil {
 				return ""
 			}
-			// 使用浅蓝色 (Cyan) 显示消息内容
 			message := fmt.Sprintf("%s", i)
-			return fmt.Sprintf("[%s %s] \x1b[96m%s\x1b[0m", theme.Icon, name, message)
+			// 使用 theme.Color 而不是硬编码色彩
+			return fmt.Sprintf("[%s %s] %s%s\x1b[0m", theme.Icon, name, theme.Color, message)
 		},
 
 		FormatFieldName: func(i interface{}) string {
@@ -52,22 +54,29 @@ func New(component Component, name string) zerolog.Logger {
 
 		FormatFieldValue: func(i interface{}) string {
 			fieldStr := fmt.Sprintf("%s", i)
-			if strings.Contains(fieldStr, string(component)) {
-				return fmt.Sprintf("%s%s%s", theme.Color, fieldStr, "\x1b[0m")
+
+			// 如果字段值恰好是组件名（例如你用 logger = logger.With().Str("component", "bot").Logger()）
+			// 那么给它上组件主题色；否则通用高亮色
+			if fieldStr == string(component) {
+				return fmt.Sprintf("%s%s\x1b[0m", theme.Color, fieldStr)
 			}
 			return fmt.Sprintf("\x1b[97m%s\x1b[0m", fieldStr) // 亮白色
 		},
 
 		FormatTimestamp: func(i interface{}) string {
-			t, ok := i.(string)
-			if !ok {
+			// ConsoleWriter 有时会传 time.Time，有时是 string，兼容处理
+			switch v := i.(type) {
+			case time.Time:
+				return fmt.Sprintf("\x1b[90m%s\x1b[0m", v.Format("01-02 15:04:05"))
+			case string:
+				// 有时是 RFC3339 字符串
+				if parsed, err := time.Parse(time.RFC3339, v); err == nil {
+					return fmt.Sprintf("\x1b[90m%s\x1b[0m", parsed.Format("01-02 15:04:05"))
+				}
+				return fmt.Sprintf("\x1b[90m%s\x1b[0m", v)
+			default:
 				return ""
 			}
-			parsed, err := time.Parse(time.RFC3339, t)
-			if err != nil {
-				return t
-			}
-			return fmt.Sprintf("\x1b[90m%s\x1b[0m", parsed.Format("01-02 15:04:05"))
 		},
 	}
 
@@ -86,6 +95,7 @@ type ComponentTheme struct {
 // 根据组件获取主题
 func getComponentTheme(component Component) ComponentTheme {
 	themes := map[Component]ComponentTheme{
+		SystemComponent:         {"🌉", "\x1b[97m"},  // 白色
 		MiddlewareComponent:     {"🌉", "\x1b[97m"},  // 白色
 		ProviderComponent:       {"📦", "\x1b[90m"},  // 灰色
 		BotComponent:            {"🚀", "\x1b[94m"},  // 蓝色
@@ -161,4 +171,8 @@ func NewMatcher(name string) zerolog.Logger {
 
 func NewHandler(name string) zerolog.Logger {
 	return New(HandlerComponent, name)
+}
+
+func NewSystem(name string) zerolog.Logger {
+	return New(SystemComponent, name)
 }

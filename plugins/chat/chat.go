@@ -121,7 +121,7 @@ func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 
 	// 获取 Bot 自己的 ID
 	if cp.botSelfID == 0 {
-		cp.botSelfID = ctx.Api.Self.ID
+		cp.botSelfID, _ = ctx.GetBotID()
 	}
 
 	text := strings.TrimSpace(msg.Text)
@@ -135,17 +135,12 @@ func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 		isAtBot = true
 	}
 
-	// 检查消息中是否包含 @bot
-	if strings.Contains(text, fmt.Sprintf("@%s", ctx.Api.Self.UserName)) {
-		isAtBot = true
-		text = strings.ReplaceAll(text, fmt.Sprintf("@%s", ctx.Api.Self.UserName), "")
-	}
-
 	if strings.HasPrefix(text, "chat") {
 		isAtBot = true
 		text = strings.TrimPrefix(text, "chat")
 	}
-	if strings.HasPrefix(text, "月灵") {
+
+	if strings.HasPrefix(text, ctx.GetBotFullname()) {
 		isAtBot = true
 	}
 
@@ -167,7 +162,7 @@ func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 
 	// 获取用户信息
 	userID := ctx.GetUserID()
-	username := ctx.GetNickName()
+	username := ctx.GetFullName()
 
 	// 调用 AI
 	cp.Log.Info().
@@ -183,7 +178,7 @@ func (cp *ChatPlugin) handleChat(ctx *ctxx.Context, msg params.Message) {
 // handleLike 查看好感度
 func (cp *ChatPlugin) handleLike(ctx *ctxx.Context, cmdCtx params.CommandContext) {
 	userID := ctx.GetUserID()
-	username := ctx.GetNickName()
+	username := ctx.GetFullName()
 
 	like := cp.getUserLike(userID)
 	info := cp.getRelationshipInfo(like)

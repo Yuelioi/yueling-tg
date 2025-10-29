@@ -1,5 +1,7 @@
 package context
 
+import "github.com/mymmrac/telego"
+
 //
 // ────────────────────────────────
 // 📩 Ⅰ. 消息类事件（用户或频道主动发出的消息）
@@ -124,26 +126,72 @@ func (c *Context) IsCallback() bool {
 // ────────────────────────────────
 //
 
-// IsCommand 判断是否为命令消息（以 “/” 开头的 Bot 指令）
 func (c *Context) IsCommand() bool {
 	msg := c.GetMessage()
-	return msg != nil && msg.IsCommand()
+	if msg == nil {
+		return false
+	}
+	// telego.Message 的 Entities 字段里会包含 BotCommand
+	for _, entity := range msg.Entities {
+		if entity.Type == "bot_command" && entity.Offset == 0 {
+			return true
+		}
+	}
+	return false
 }
 
-// IsPrivate 判断是否为私聊
+// IsCommand 判断是否为私聊
 func (c *Context) IsPrivate() bool {
 	msg := c.GetMessage()
-	return msg != nil && msg.Chat.IsPrivate()
+	return msg != nil && msg.Chat.Type == telego.ChatTypePrivate
 }
 
 // IsGroup 判断是否为普通群聊
 func (c *Context) IsGroup() bool {
 	msg := c.GetMessage()
-	return msg != nil && msg.Chat.IsGroup()
+	return msg != nil && msg.Chat.Type == telego.ChatTypeGroup
 }
 
 // IsSuperGroup 判断是否为超级群聊
 func (c *Context) IsSuperGroup() bool {
 	msg := c.GetMessage()
-	return msg != nil && msg.Chat.IsSuperGroup()
+	return msg != nil && msg.Chat.Type == telego.ChatTypeSupergroup
+}
+
+// IsGroupChat 是否为群组聊天
+func (c *Context) IsGroupChat() bool {
+	chatType := c.GetChatType()
+	return chatType == "group" || chatType == "supergroup"
+}
+
+// IsChannelPost 是否为频道消息
+func (c *Context) IsChannelPost() bool {
+	return c.Update.ChannelPost != nil || c.Update.EditedChannelPost != nil
+}
+
+// IsBot 判断用户是否为机器人
+func (c *Context) IsBot() bool {
+	user := c.GetUser()
+	if user != nil {
+		return user.IsBot
+	}
+	return false
+}
+
+// IsEdited 是否为编辑后的消息
+func (c *Context) IsEdited() bool {
+	return c.Update.EditedMessage != nil || c.Update.EditedChannelPost != nil
+}
+
+// IsReply 是否为回复消息
+func (c *Context) IsReply() bool {
+	return c.GetReplyToMessage() != nil
+}
+
+// IsPinnedMessage 是否为置顶消息通知
+func (c *Context) IsPinnedMessage() bool {
+	if c.Update.Message != nil {
+		return c.Update.Message.PinnedMessage != nil
+	}
+	return false
 }

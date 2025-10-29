@@ -1,27 +1,63 @@
 package bot
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
 	"yueling_tg/internal/core"
+	logx "yueling_tg/internal/core/log"
 	"yueling_tg/internal/middleware"
 	"yueling_tg/pkg/plugin"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"github.com/rs/zerolog"
+	"github.com/mymmrac/telego"
+	"github.com/rs/zerolog/log"
 )
 
 type Bot struct {
 	runtime *core.Runtime
 }
 
-// NewBot 创建一个新的 Bot 实例
-func NewBot(botToken string, logger zerolog.Logger) (*Bot, error) {
-	api, err := tgbotapi.NewBotAPI(botToken)
-	if err != nil {
-		return nil, err
+type ZerologWrapper struct{}
+
+func (z ZerologWrapper) Debugf(format string, args ...any) {
+
+	if strings.Contains(format, "API call to") || strings.Contains(format, "API response") {
+		return
 	}
 
-	logger.Info().Msgf("授权账户: @%s", api.Self.UserName)
-	runtime := core.NewRuntime(api, logger)
+	log.Debug().Msg(format)
+	log.Debug().Msgf(format, args...)
+}
+
+// Errorf logs error messages
+func (z ZerologWrapper) Errorf(format string, args ...any) {
+	log.Error().Msgf(format, args...)
+}
+
+// 创建一个新的 Bot 实例
+func NewBot(botToken string, client *http.Client) (*Bot, error) {
+	loggerWrapper := ZerologWrapper{}
+
+	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger(), telego.WithHTTPClient(client), telego.WithLogger(loggerWrapper))
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	b, err := bot.GetMe(context.Background())
+	if err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	fullName := b.FirstName + b.LastName
+
+	botLogger := logx.NewBot(fullName)
+	botLogger.Info().Msgf("授权账户: @%s", fullName)
+
+	runtime := core.NewRuntime(bot, botLogger)
 
 	return &Bot{runtime: runtime}, nil
 }

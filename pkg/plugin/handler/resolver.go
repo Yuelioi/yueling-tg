@@ -90,7 +90,7 @@ func tryConvertType(srcValue reflect.Value, srcType, tgtType reflect.Type) (refl
 		return srcValue, true
 	}
 
-	// 3. 底层类型相同的命名类型转换（如 type Message tgbotapi.Message）
+	// 3. 底层类型相同的命名类型转换（如 type Message telego.Message）
 	if canConvertUnderlyingType(srcValue, srcType, tgtType) {
 		return srcValue.Convert(tgtType), true
 	}
@@ -185,7 +185,7 @@ func tryConvertType(srcValue reflect.Value, srcType, tgtType reflect.Type) (refl
 }
 
 // canConvertUnderlyingType 检查两个类型的底层类型是否相同且可转换
-// 用于处理 type Message tgbotapi.Message 这种命名类型
+// 用于处理 type Message telego.Message 这种命名类型
 func canConvertUnderlyingType(srcValue reflect.Value, srcType, tgtType reflect.Type) bool {
 	// 必须是同一种 Kind
 	if srcType.Kind() != tgtType.Kind() {

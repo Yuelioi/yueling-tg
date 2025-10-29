@@ -2,10 +2,9 @@ package permission
 
 import (
 	"log"
-	"strings"
 	"yueling_tg/internal/core/context"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/mymmrac/telego"
 )
 
 func getUserRole(ctx *context.Context) string {
@@ -26,31 +25,42 @@ func getUserRole(ctx *context.Context) string {
 		return "member"
 	}
 
-	// 3. 准备 GetChatMember 配置
-	config := tgbotapi.GetChatMemberConfig{
-		ChatConfigWithUser: tgbotapi.ChatConfigWithUser{
-			ChatID: ctx.GetChatID(), // 聊天的ID
-			UserID: ctx.GetUserID(), // 用户的ID
-		},
-	}
-
-	// 4. 调用 API 获取成员信息
-	member, err := ctx.Api.GetChatMember(config)
+	// 3. 调用 API 获取成员信息
+	member, err := ctx.Api.GetChatMember(ctx.Ctx, &telego.GetChatMemberParams{
+		ChatID: ctx.GetChatID(), // 聊天的ID
+		UserID: ctx.GetUserID(), // 用户的ID
+	})
 	if err != nil {
 		log.Printf("调用 GetChatMember 失败: %v", err)
 		return "unknown"
 	}
 
-	// 5. 解析 Status 字段
-	// Status 字段返回的是一个字符串，可能的取值包括:
-	// "creator", "administrator", "member", "restricted", "left", "kicked"
-	role := strings.ToLower(member.Status)
+	// 4. 解析成员状态
+	// member 是一个 ChatMember 接口，需要通过类型断言获取具体类型
+	var role string
+	switch m := member.(type) {
+	case *telego.ChatMemberOwner:
+		role = "creator"
+	case *telego.ChatMemberAdministrator:
+		role = "admin"
+	case *telego.ChatMemberMember:
+		role = "member"
+	case *telego.ChatMemberRestricted:
+		role = "restricted"
+	case *telego.ChatMemberLeft:
+		role = "left"
+	case *telego.ChatMemberBanned:
+		role = "kicked"
+	default:
+		log.Printf("未知的 ChatMember 类型: %T", m)
+		role = "unknown"
+	}
 
-	// 为了简化，你可以将不同的状态映射到你需要的角色：
+	// 5. 映射角色到统一格式
 	switch role {
 	case "creator":
 		return "creator" // 聊天创建者
-	case "administrator":
+	case "admin":
 		return "admin" // 管理员
 	case "member":
 		return "member" // 普通成员
@@ -58,8 +68,6 @@ func getUserRole(ctx *context.Context) string {
 		return "restricted" // 受限成员（被禁言等）
 	case "left", "kicked":
 		return "not_in_chat" // 已经不在群里
-	case "unknown":
-		return "unknown" // 报错
 	default:
 		return "member"
 	}
