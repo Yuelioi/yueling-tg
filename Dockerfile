@@ -1,13 +1,13 @@
 # -------------------- 构建阶段 --------------------
 FROM golang:1.25-alpine AS builder
 
-# 安装构建依赖（CGO 所需）
-RUN apk add --no-cache gcc g++ musl-dev pkgconfig libwebp-dev git
+# 安装 CGO 所需依赖
+RUN apk add --no-cache \
+  gcc g++ musl-dev pkgconfig libwebp-dev git
 
-# 设置工作目录
 WORKDIR /app
 
-# 先复制 go.mod go.sum 并下载模块，利用缓存
+# 先复制模块文件并下载依赖（缓存友好）
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -21,16 +21,16 @@ RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o main .
 FROM alpine:latest
 
 # 安装运行时依赖
-RUN apk add --no-cache ca-certificates libwebp tzdata
+RUN apk add --no-cache libwebp ca-certificates tzdata
 
 ENV TZ=Asia/Shanghai
-
 WORKDIR /app
 
 # 复制构建好的二进制
 COPY --from=builder /app/main .
 
-# 使用安全的非 root 用户
-USER nobody
+# 使用非 root 用户运行
+RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
+USER appuser
 
 CMD ["./main"]
