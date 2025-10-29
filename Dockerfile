@@ -1,36 +1,52 @@
 # -------------------- 构建阶段 --------------------
 FROM golang:1.25-alpine AS builder
 
-# 安装 CGO 所需依赖
+# 安装构建依赖
 RUN apk add --no-cache \
-  gcc g++ musl-dev pkgconfig libwebp-dev git
+  git \
+  gcc \
+  g++ \
+  musl-dev \
+  pkgconfig \
+  freetype-dev
 
+# 设置工作目录
 WORKDIR /app
 
-# 先复制模块文件并下载依赖（缓存友好）
+# 复制依赖文件
 COPY go.mod go.sum ./
 RUN go mod download
 
 # 复制源码
 COPY . .
 
-# 编译二进制（启用 CGO）
-RUN CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -o main .
+# 构建可执行文件（启用 CGO 支持）
+RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main .
 
 # -------------------- 运行阶段 --------------------
 FROM alpine:latest
 
 # 安装运行时依赖
-RUN apk add --no-cache libwebp ca-certificates tzdata
+RUN apk add --no-cache \
+  ca-certificates \
+  freetype \
+  tzdata
 
+# 设置时区
 ENV TZ=Asia/Shanghai
+
+# 创建非 root 用户
+RUN addgroup -g 1000 appuser && \
+  adduser -D -u 1000 -G appuser appuser
+
+# 设置工作目录
 WORKDIR /app
 
-# 复制构建好的二进制
+# 复制构建阶段的二进制文件
 COPY --from=builder /app/main .
 
-# 使用非 root 用户运行
-RUN addgroup -g 1000 appuser && adduser -D -u 1000 -G appuser appuser
+# 切换到非 root 用户
 USER appuser
 
+# 启动命令
 CMD ["./main"]
