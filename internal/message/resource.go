@@ -36,12 +36,12 @@ func NewResourceWithCaption(input string, caption string) Resource {
 	}
 
 	// 2️⃣ 判断是否是本地文件（存在）
-	if _, err := os.Stat(input); err == nil {
-		file, err := os.Open(input)
+	if info, err := os.Stat(input); err == nil && !info.IsDir() {
+		data, err := os.ReadFile(input)
 		if err == nil {
 			return Resource{
 				Data: telego.InputFile{
-					File: file,
+					File: NewNameReader(filepath.Base(input), data),
 				},
 				Caption: caption,
 			}

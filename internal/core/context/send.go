@@ -84,6 +84,16 @@ func (c *Context) SendPhotoWithMarkup(photo message.Resource, markup telego.Inli
 	return c.Api.SendPhoto(c.Ctx, &msg)
 }
 
+func (c *Context) SendDocumentWithMarkup(doc message.Resource, markup telego.InlineKeyboardMarkup) (*telego.Message, error) {
+	msg := telego.SendDocumentParams{
+		ChatID:      c.GetChatID(),
+		Document:    doc.Data,
+		Caption:     doc.Caption,
+		ReplyMarkup: &markup,
+	}
+	return c.Api.SendDocument(c.Ctx, &msg)
+}
+
 // SendWithOptions 发送消息（完全自定义）
 func (c *Context) SendWithOptions(text string, options func(msg *telego.SendMessageParams)) (*telego.Message, error) {
 	msg := telego.SendMessageParams{

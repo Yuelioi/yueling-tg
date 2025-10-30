@@ -31,7 +31,6 @@ func NewRuntime(api *telego.Bot, logger zerolog.Logger) *Runtime {
 }
 
 // Run 启动事件循环
-// Run 启动事件循环
 func (r *Runtime) Run() {
 
 	gc := handler.InitGlobalContainer()
@@ -50,7 +49,36 @@ func (r *Runtime) Run() {
 
 	r.Logger.Info().Msg("Bot 运行中...")
 
-	updates, _ := r.Api.UpdatesViaLongPolling(context.Background(), nil)
+	updates, _ := r.Api.UpdatesViaLongPolling(context.Background(), &telego.GetUpdatesParams{
+		Offset:  0,
+		Limit:   100, // 建议设置为 100,每次最多获取 100 条更新
+		Timeout: 60,  // 长轮询超时时间(秒),建议设置为 60
+		AllowedUpdates: []string{
+			telego.MessageUpdates,
+			telego.EditedMessageUpdates,
+			telego.ChannelPostUpdates,
+			telego.EditedChannelPostUpdates,
+			telego.BusinessConnectionUpdates,
+			telego.BusinessMessageUpdates,
+			telego.EditedBusinessMessageUpdates,
+			telego.DeletedBusinessMessagesUpdates,
+			telego.MessageReactionUpdates,      // 表情反应
+			telego.MessageReactionCountUpdates, // 表情反应统计
+			telego.InlineQueryUpdates,
+			telego.ChosenInlineResultUpdates,
+			telego.CallbackQueryUpdates,
+			telego.ShippingQueryUpdates,
+			telego.PreCheckoutQueryUpdates,
+			telego.PurchasedPaidMediaUpdates,
+			telego.PollUpdates,
+			telego.PollAnswerUpdates,
+			telego.MyChatMemberUpdates,
+			telego.ChatMemberUpdates,
+			telego.ChatJoinRequestUpdates,
+			telego.ChatBoostUpdates,
+			telego.RemovedChatBoostUpdates,
+		},
+	})
 
 	for update := range updates {
 		ctx := contextx.NewContext(context.Background(), r.Api, update)

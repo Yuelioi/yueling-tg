@@ -56,8 +56,9 @@ type ImageIndexDB struct {
 
 type RandomGenerator struct {
 	*plugin.Base
-	config  PluginConfig
-	indexDB *ImageIndexDB
+	config     PluginConfig
+	indexDB    *ImageIndexDB //暂时用不到 因为tg图片会被压缩 只能使用文档格式
+	msgHistory sync.Map
 }
 
 // -------------------- 插件入口 --------------------
@@ -99,10 +100,13 @@ func New() plugin.Plugin {
 
 	// 添加图片命令
 	addCommands := rg.generateAddCommands()
-	builder.OnCommand(addCommands...).Do(rg.handleAddImage)
+	builder.OnCommand(addCommands...).Block(true).Do(rg.handleAddImage)
 
 	// 删除图片命令
 	builder.OnCommand("删除图片").Block(true).Do(rg.handleDeleteImage)
+
+	// 重建索引
+	builder.OnFullMatch("重建图片索引").Do(rg.handleRebuildIndex)
 
 	// 回调命令
 	builder.OnCallbackStartsWith(info.ID).Priority(9).Do(rg.handleAnother)
@@ -144,44 +148,27 @@ func (rg *RandomGenerator) generateAddCommands() []string {
 	return commands
 }
 
-// findCategoryByFolder 根据文件夹名查找分类配置
-func (rg *RandomGenerator) findCategoryByFolder(folder string) *CategoryConfig {
-	for _, cat := range rg.config.Categories {
-		if cat.Folder == folder {
-			return &cat
-		}
-	}
-	return nil
-}
-
 // -------------------- 再来一张 --------------------
 
 func (rg *RandomGenerator) handleAnother(cmd string, c *context.Context) error {
-	rg.Log.Debug().Str("from", cmd).Msg("收到随机按钮点击")
-
 	parts := strings.Split(cmd, "_")
 	if len(parts) != 2 {
-		rg.Log.Error().Str("cmd", cmd).Msg("按钮点击格式错误")
 		return nil
 	}
 
 	folder := parts[1]
 
-	// 获取原消息 ID
 	msg := c.GetCallbackQuery().Message
 	if msg == nil {
-		rg.Log.Error().Msg("callback没有原消息")
 		return nil
 	}
 
-	// 重新选择一张图片
-	imgPaths, err := rg.selectImages(filepath.Join("./data/images", folder), 1)
+	imgPaths, err := rg.selectImages(filepath.Join(rg.config.ImagesFolder, folder), 1)
 	if err != nil {
 		c.AnswerCallback("没有可用图片 😢")
 		return nil
 	}
 
-	// 重新创建按钮
 	buttons := rg.createButton(folder)
 
 	params := &telego.EditMessageMediaParams{
@@ -193,9 +180,22 @@ func (rg *RandomGenerator) handleAnother(cmd string, c *context.Context) error {
 
 	_, err = c.Api.EditMessageMedia(c.Ctx, params)
 	if err != nil {
-		rg.Log.Error().Err(err).Msg("编辑消息失败")
 		c.AnswerCallback("换图失败 😢")
 		return err
+	}
+
+	// 更新发送历史
+	_, ok := rg.findHistoryByPath(imgPaths[0])
+	if !ok {
+		imgIndex := &ImageIndex{
+			Path:     imgPaths[0],
+			Filename: filepath.Base(imgPaths[0]),
+			Hash:     "",
+			Category: folder,
+		}
+
+		key := fmt.Sprintf("%d:%d", msg.GetChat().ID, msg.GetMessageID())
+		rg.msgHistory.Store(key, imgIndex)
 	}
 
 	c.AnswerCallback("已换一张 🔄")
@@ -224,13 +224,15 @@ func (rg *RandomGenerator) handleCommand(c *context.Context, cfg CategoryConfig)
 		Str("folder", cfg.Folder).
 		Msg("收到随机命令")
 
-	folder := filepath.Join("./data/images", cfg.Folder)
+	folder := filepath.Join(rg.config.ImagesFolder, cfg.Folder)
 	imgPaths, err := rg.selectImages(folder, cfg.Count)
 	if err != nil {
 		rg.Log.Error().Err(err).Str("folder", folder).Msg("无法读取图片")
 		c.Reply("还没准备好图片哦～ 📂")
 		return
 	}
+
+	c.ReplyReactionAck()
 
 	if cfg.Count == 1 {
 		rg.sendSinglePhoto(c, cfg, imgPaths[0])
@@ -278,7 +280,25 @@ func (rg *RandomGenerator) sendSinglePhoto(c *context.Context, cfg CategoryConfi
 	photo := message.NewResource(imgPath).WithCaption(cfg.Caption)
 	buttons := rg.createButton(cfg.Folder)
 
-	c.SendPhotoWithMarkup(photo, buttons)
+	msg, err := c.SendPhotoWithMarkup(photo, buttons)
+	if err != nil {
+		rg.Log.Error().Err(err).Msg("发送图片失败")
+		return
+	}
+
+	// 保存发送历史
+	_, ok := rg.findHistoryByPath(imgPath)
+	if !ok {
+		imgIndex := &ImageIndex{
+			Path:     imgPath,
+			Filename: filepath.Base(imgPath),
+			Hash:     "",
+			Category: cfg.Folder,
+		}
+
+		key := fmt.Sprintf("%d:%d", msg.GetChat().ID, msg.GetMessageID())
+		rg.msgHistory.Store(key, imgIndex)
+	}
 }
 
 func (rg *RandomGenerator) sendMediaGroup(c *context.Context, cfg CategoryConfig, imgPaths []string) {

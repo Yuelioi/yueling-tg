@@ -9,6 +9,7 @@ services:
       - HTTPS_PROXY=http://host.docker.internal:10808
     volumes:
       - ./data:/app/data
+      - ./config.toml:/app/config.toml
       - ./.env:/app/.env:ro
     network_mode: "host" # 使用宿主机网络
     extra_hosts:

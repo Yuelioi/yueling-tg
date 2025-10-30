@@ -19,9 +19,36 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 		Str("cmd", string(cmd)).
 		Msg("收到添加图片命令")
 
-	category := strings.TrimPrefix(string(cmd), "添加")
-	if category == "" {
+	categoryKeyword := strings.TrimSpace(strings.TrimPrefix(cmd, "添加"))
+	if categoryKeyword == "" {
 		c.Reply("请使用正确命令格式，例如：添加老婆 或 添加吃的。")
+		return
+	}
+
+	// 2. 在配置中查找匹配的分类
+	var matchedCategory *CategoryConfig
+	for i := range rg.config.Categories {
+		cat := &rg.config.Categories[i]
+		for _, trigger := range cat.Commands {
+			if trigger == categoryKeyword {
+				matchedCategory = cat
+				break
+			}
+		}
+		if matchedCategory != nil {
+			break
+		}
+	}
+
+	if matchedCategory == nil {
+		c.Reply(fmt.Sprintf("未找到对应分类: %s，请检查配置或使用其他命令。", categoryKeyword))
+		return
+	}
+
+	// 3. 获取 folder
+	folderName := matchedCategory.Folder
+	if folderName == "" {
+		c.Reply("分类配置中未指定文件夹，请检查配置。")
 		return
 	}
 
@@ -33,7 +60,7 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 	}
 
 	// 构建文件夹路径
-	folder := filepath.Join("./data/images", category)
+	folder := filepath.Join(rg.config.ImagesFolder, folderName)
 	if err := os.MkdirAll(folder, 0755); err != nil {
 		rg.Log.Error().Err(err).Msg("创建文件夹失败")
 		c.Reply("保存图片失败，无法创建文件夹 😢")
@@ -71,16 +98,6 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 		// 计算哈希
 		hash := common.Sha1Hash(data)
 
-		// 检查是否已存在（基于哈希）
-		if existingImg, ok := rg.findByHash(hash); ok {
-			duplicates++
-			rg.Log.Info().
-				Str("hash", hash).
-				Str("existing_path", existingImg.Path).
-				Msg("图片已存在（哈希匹配），跳过")
-			continue
-		}
-
 		// -------------------- 自动识别文件类型 --------------------
 		mime := http.DetectContentType(data)
 		ext := ".jpg"
@@ -115,7 +132,21 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 		}
 
 		// 添加到索引
-		rg.addToIndex(hash, savePath, category, filename)
+		rg.addToIndex(savePath, folderName, filename)
+
+		imgIndex, ok := rg.findHistoryByPath(savePath)
+		if !ok || imgIndex == nil {
+			imgIndex = &ImageIndex{
+				Path:     savePath,
+				Filename: filepath.Base(savePath),
+				Hash:     hash,
+				Category: folderName,
+			}
+
+			// 保存历史记录索引
+			key := fmt.Sprintf("%d:%d", c.GetChatID().ID, c.GetMessageID())
+			rg.msgHistory.Store(key, imgIndex)
+		}
 
 		success++
 		rg.Log.Info().
@@ -135,15 +166,15 @@ func (rg *RandomGenerator) handleAddImage(c *context.Context, cmdCtx params.Comm
 	var replyMsg string
 	if namePrefix != "" {
 		if success > 0 {
-			replyMsg = fmt.Sprintf("成功保存 %d 张图片为『%s』到『%s』📁", success, namePrefix, category)
+			replyMsg = fmt.Sprintf("成功保存 %d 张图片为『%s』到『%s』📁", success, namePrefix, folderName)
 		} else {
 			replyMsg = "没有新图片保存 😢"
 		}
 	} else {
 		if success > 0 && duplicates > 0 {
-			replyMsg = fmt.Sprintf("成功保存 %d 张新图片到『%s』📁\n有 %d 张图片已存在，已跳过 🔄", success, category, duplicates)
+			replyMsg = fmt.Sprintf("成功保存 %d 张新图片到『%s』📁\n有 %d 张图片已存在，已跳过 🔄", success, folderName, duplicates)
 		} else if success > 0 {
-			replyMsg = fmt.Sprintf("成功保存 %d 张图片到『%s』📁", success, category)
+			replyMsg = fmt.Sprintf("成功保存 %d 张图片到『%s』📁", success, folderName)
 		} else if duplicates > 0 {
 			replyMsg = fmt.Sprintf("所有图片都已存在，共 %d 张 ✅", duplicates)
 		} else {

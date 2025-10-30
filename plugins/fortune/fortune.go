@@ -19,6 +19,7 @@ import (
 	"yueling_tg/pkg/config"
 	"yueling_tg/pkg/plugin"
 	"yueling_tg/pkg/plugin/handler"
+	"yueling_tg/pkg/plugin/params"
 
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -84,10 +85,16 @@ func New() plugin.Plugin {
 	return p
 }
 
-func (fm *FortuneGenerator) divine(ctx *context.Context) {
+func (fm *FortuneGenerator) divine(ctx *context.Context, cmdCtx *params.CommandContext) {
 	uid := ctx.GetUserID()
-	// themes := strings.Split(ctx.Args, " ")
-	themes := []string{"ba"}
+
+	themes := []string{}
+	if len(cmdCtx.Args) > 0 {
+		themes = strings.Split(cmdCtx.Args[0], " ")
+	}
+
+	ctx.ReplyReactionAck()
+
 	ok, path, err := fm.Divine(uid, themes...)
 	if err != nil {
 		ctx.Send(fmt.Sprintf("抽签失败: %s", err.Error()))

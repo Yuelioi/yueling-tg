@@ -23,8 +23,8 @@ type Bot struct {
 type ZerologWrapper struct{}
 
 func (z ZerologWrapper) Debugf(format string, args ...any) {
-
-	if strings.Contains(format, "API call to") || strings.Contains(format, "API response") {
+	if strings.Contains(format, "API call to") ||
+		strings.Contains(format, "API response") {
 		return
 	}
 
@@ -34,6 +34,15 @@ func (z ZerologWrapper) Debugf(format string, args ...any) {
 
 // Errorf logs error messages
 func (z ZerologWrapper) Errorf(format string, args ...any) {
+
+	msg := fmt.Sprintf(format, args...)
+
+	if strings.Contains(format, "Retrying getting") ||
+		strings.Contains(format, "Getting updates") ||
+		strings.Contains(msg, "context deadline exceeded") {
+		return
+	}
+
 	log.Error().Msgf(format, args...)
 }
 
@@ -41,7 +50,11 @@ func (z ZerologWrapper) Errorf(format string, args ...any) {
 func NewBot(botToken, configPath string, client *http.Client) (*Bot, error) {
 	loggerWrapper := ZerologWrapper{}
 
-	bot, err := telego.NewBot(botToken, telego.WithDefaultDebugLogger(), telego.WithHTTPClient(client), telego.WithLogger(loggerWrapper))
+	bot, err := telego.NewBot(botToken,
+		telego.WithDefaultDebugLogger(),
+		telego.WithHTTPClient(client),
+		telego.WithLogger(loggerWrapper),
+	)
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)

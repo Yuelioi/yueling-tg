@@ -6,30 +6,21 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"yueling_tg/internal/core/context"
 	"yueling_tg/pkg/common"
 
 	"golang.org/x/sync/errgroup"
 )
 
 // -------------------- 索引管理 --------------------
-
-// 加载或创建图片索引
-func (rg *RandomGenerator) loadOrCreateIndex() error {
-	if err := rg.loadIndex(); err != nil {
-		rg.Log.Warn().Err(err).Msg("加载索引失败，将扫描所有图片")
-	}
-
-	categories := []string{}
-
-	for _, category := range rg.config.Categories {
-		categories = append(categories, strings.ToLower(category.Folder))
-	}
-
+func (rg *RandomGenerator) scanAllCategories() (updated bool, err error) {
 	var updatedMu sync.Mutex
-	updated := false
+	updated = false
+
 	g := new(errgroup.Group)
 
-	for _, category := range categories {
+	for _, cat := range rg.config.Categories {
+		category := strings.ToLower(cat.Folder) // 避免闭包问题
 		g.Go(func() error {
 			folder := filepath.Join(rg.config.ImagesFolder, category)
 			if _, err := os.Stat(folder); os.IsNotExist(err) {
@@ -38,6 +29,7 @@ func (rg *RandomGenerator) loadOrCreateIndex() error {
 			ok, err := rg.scanFolder(category, folder)
 			if err != nil {
 				rg.Log.Error().Err(err).Str("category", category).Msg("扫描文件夹失败")
+				return err
 			}
 			if ok {
 				updatedMu.Lock()
@@ -49,6 +41,50 @@ func (rg *RandomGenerator) loadOrCreateIndex() error {
 	}
 
 	if err := g.Wait(); err != nil {
+		return updated, err
+	}
+	return updated, nil
+}
+
+func (rg *RandomGenerator) handleRebuildIndex(ctx *context.Context) {
+	rg.Log.Info().Msg("开始重建图片索引，无条件扫描所有图片...")
+
+	// 清空当前索引
+	rg.indexDB.mu.Lock()
+	rg.indexDB.Images = make(map[string]*ImageIndex)
+	rg.indexDB.mu.Unlock()
+
+	// 扫描所有分类
+	updated, err := rg.scanAllCategories()
+	if err != nil {
+		rg.Log.Error().Err(err).Msg("扫描所有图片失败")
+		ctx.Replyf("扫描所有图片失败: %v", err)
+		return
+	}
+
+	if updated {
+		rg.Log.Info().Msg("索引重建完成，正在保存索引...")
+		if err := rg.saveIndex(); err != nil {
+			rg.Log.Error().Err(err).Msg("保存索引失败")
+			ctx.Replyf("保存索引失败: %v", err)
+			return
+		}
+		ctx.Reply("索引重建完成 ✅")
+		return
+	}
+
+	rg.Log.Info().Msg("未发现图片，索引已清空")
+	ctx.Reply("未发现图片，索引已清空")
+}
+
+// 加载或创建图片索引
+func (rg *RandomGenerator) loadOrCreateIndex() error {
+	if err := rg.loadIndex(); err != nil {
+		rg.Log.Warn().Err(err).Msg("加载索引失败，将扫描所有图片")
+	}
+
+	updated, err := rg.scanAllCategories()
+	if err != nil {
 		return err
 	}
 
@@ -172,12 +208,11 @@ func (rg *RandomGenerator) scanFolder(category, folder string) (bool, error) {
 }
 
 // addToIndex 添加单个图片到索引
-func (rg *RandomGenerator) addToIndex(hash, path, category, filename string) {
+func (rg *RandomGenerator) addToIndex(path, category, filename string) {
 	rg.indexDB.mu.Lock()
 	defer rg.indexDB.mu.Unlock()
 
-	rg.indexDB.Images[hash] = &ImageIndex{
-		Hash:     hash,
+	rg.indexDB.Images[path] = &ImageIndex{
 		Path:     path,
 		Category: category,
 		Filename: filename,
@@ -185,18 +220,26 @@ func (rg *RandomGenerator) addToIndex(hash, path, category, filename string) {
 }
 
 // removeFromIndex 从索引中移除图片
-func (rg *RandomGenerator) removeFromIndex(hash string) {
+func (rg *RandomGenerator) removeFromIndex(path string) {
 	rg.indexDB.mu.Lock()
 	defer rg.indexDB.mu.Unlock()
 
-	delete(rg.indexDB.Images, hash)
+	delete(rg.indexDB.Images, path)
 }
 
 // findByHash 根据哈希查找图片
-func (rg *RandomGenerator) findByHash(hash string) (*ImageIndex, bool) {
-	rg.indexDB.mu.RLock()
-	defer rg.indexDB.mu.RUnlock()
+func (rg *RandomGenerator) findHistoryByPath(path string) (*ImageIndex, bool) {
+	val, ok := rg.msgHistory.Load(path)
+	if !ok {
+		return nil, false
+	}
+	imgIndex, ok := val.(*ImageIndex)
+	if !ok {
+		return nil, false
+	}
+	if imgIndex == nil {
+		return nil, false
+	}
 
-	idx, ok := rg.indexDB.Images[hash]
-	return idx, ok
+	return imgIndex, ok
 }

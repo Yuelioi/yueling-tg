@@ -129,6 +129,8 @@ func (mp *MusicPlugin) handleSearch(c *context.Context) {
 		return
 	}
 
+	c.ReplyReactionAck()
+
 	keyword := strings.Join(parts[1:], " ")
 
 	// 默认使用网易云搜索

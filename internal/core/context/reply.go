@@ -168,6 +168,48 @@ func (c *Context) ReplySticker(sticker message.Resource) (*telego.Message, error
 	return c.Api.SendSticker(c.Ctx, &msg)
 }
 
+// ReplyReaction 使用标准 emoji 回复
+func (c *Context) ReplyReaction(emoji string) error {
+	return c.replyReaction(&telego.ReactionTypeEmoji{
+		Type:  "emoji",
+		Emoji: emoji,
+	}, false)
+}
+
+func (c *Context) ReplyReactionAck() error {
+	return c.replyReaction(&telego.ReactionTypeEmoji{
+		Type:  "emoji",
+		Emoji: "👌",
+	}, false)
+}
+
+// ReplyCustomReaction 使用自定义表情回复
+func (c *Context) ReplyCustomReaction(customEmojiID string) error {
+	return c.replyReaction(&telego.ReactionTypeCustomEmoji{
+		Type:          "custom_emoji",
+		CustomEmojiID: customEmojiID,
+	}, false)
+}
+
+func (c *Context) replyReaction(reaction interface{}, isBig bool) error {
+	var reactions []telego.ReactionType
+
+	switch r := reaction.(type) {
+	case telego.ReactionType:
+		reactions = []telego.ReactionType{r}
+	case []telego.ReactionType:
+		reactions = r
+	}
+
+	params := &telego.SetMessageReactionParams{
+		ChatID:    telego.ChatID{ID: c.GetChat().ID},
+		MessageID: c.GetMessageID(),
+		Reaction:  reactions,
+		IsBig:     isBig,
+	}
+	return c.Api.SetMessageReaction(c.Ctx, params)
+}
+
 // ============ 媒体组发送方法 ============
 
 // ReplyLocation 回复位置
