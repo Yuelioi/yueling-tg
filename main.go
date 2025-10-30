@@ -11,6 +11,7 @@ import (
 	"yueling_tg/pkg/bot"
 	"yueling_tg/plugins/admin"
 	"yueling_tg/plugins/ban"
+	"yueling_tg/plugins/banword"
 	"yueling_tg/plugins/calculator"
 	"yueling_tg/plugins/chat"
 	"yueling_tg/plugins/emotion"
@@ -19,6 +20,7 @@ import (
 	"yueling_tg/plugins/image"
 	"yueling_tg/plugins/music"
 	"yueling_tg/plugins/random"
+	"yueling_tg/plugins/randommember"
 	"yueling_tg/plugins/recall"
 	"yueling_tg/plugins/reply"
 	"yueling_tg/plugins/sticker"
@@ -79,7 +81,8 @@ func main() {
 
 	b.RegisterPlugins(
 		image.New(), emotion.New(), fortune.New(), help.New(), reply.New(), chat.New(),
-		ban.New(), recall.New(), calculator.New(), random.New(), music.New(), sticker.New(), admin.New(),
+		ban.New(), recall.New(), calculator.New(), random.New(), music.New(),
+		sticker.New(), admin.New(), banword.New(), randommember.New(),
 	)
 
 	b.Run()

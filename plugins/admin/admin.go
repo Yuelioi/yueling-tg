@@ -36,7 +36,7 @@ func New() plugin.Plugin {
 	builder := plugin.New().
 		Info(info)
 
-	// 命令处理 - 需要是群主或有权限的管理员才能使用
+	// 需要是群主或有权限的管理员才能使用
 	builder.OnCommand("设置管理员").When(permission.GroupOwner()).Block(true).Do(ap.handlePromoteAdmin)
 	builder.OnCommand("取消管理员").When(permission.GroupOwner()).Block(true).Do(ap.handleDemoteAdmin)
 	builder.OnCommand("管理员列表").When(permission.GroupAdminOrOwner()).Do(ap.handleListAdmins)

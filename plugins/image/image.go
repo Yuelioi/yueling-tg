@@ -198,7 +198,6 @@ func (rg *RandomGenerator) handleAnother(cmd string, c *context.Context) error {
 		rg.msgHistory.Store(key, imgIndex)
 	}
 
-	c.AnswerCallback("已换一张 🔄")
 	return nil
 }
 

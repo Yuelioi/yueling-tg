@@ -166,7 +166,6 @@ func (ep *EmotePlugin) another(cmd string, c *context.Context) error {
 		return err
 	}
 
-	c.AnswerCallback("已换一张 🔄")
 	return nil
 }
 
